@@ -24,32 +24,7 @@ export default function App() {
   const [atecoError, setAtecoError] = useState(false);
   const [intendsToInvest, setIntendsToInvest] = useState(false);
 
-  useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    if (query.get("success")) {
-      alert("Pagamento completato con successo! Riceverai un'email con i dettagli.");
-    }
-    if (query.get("canceled")) {
-      alert("Pagamento annullato. Puoi riprovare quando vuoi.");
-    }
-  }, []);
-
-  const handlePayment = async () => {
-    try {
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-      });
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        alert("Errore durante la creazione del pagamento.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Errore di connessione al server.");
-    }
-  };
+  // Payment handling removed - application is now free upfront
 
   const handleAtecoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (e.target.value === "Altro") {
@@ -364,10 +339,10 @@ export default function App() {
             <div className="grid lg:grid-cols-2 gap-16 items-start">
               <div className="sticky top-32">
                 <h2 className="text-[50px] font-bold tracking-tight mb-6 leading-tight text-stone-900">
-                  Avvia la tua pratica oggi stesso
+                  Invia la tua domanda gratuitamente
                 </h2>
                 <p className="text-[16px] text-stone-600 mb-8 leading-relaxed">
-                  Il servizio di simulazione e presentazione della domanda per il bando Parco Agrisolare richiede un'analisi tecnica approfondita. Compila il modulo per inviare i tuoi dati e procedere al pagamento dell'anticipo per l'avvio della pratica.
+                  Il servizio di simulazione e presentazione della fattibilità per il bando Parco Agrisolare è completamente gratuito. Compila il modulo per inviare i tuoi dati. Successivamente, in caso di esito positivo della pre-fattibilità, ti verranno richiesti i fondi per la gestione della pratica e del bando.
                 </p>
                 
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 text-center sm:text-left flex flex-col sm:flex-row items-center gap-4">
@@ -377,15 +352,15 @@ export default function App() {
                   <div>
                     <h4 className="text-xl font-bold text-red-700 uppercase tracking-tight mb-1">Scadenza Imminente</h4>
                     <p className="text-red-600 font-medium">
-                      Il termine ultimo per l'inserimento delle domande e il pagamento dell'anticipo è <strong className="font-black text-red-800">VENERDÌ 20</strong>. Oltre questa data non potremo gestire la procedura.
+                      Il termine ultimo per l'inserimento delle domande è <strong className="font-black text-red-800">VENERDÌ 20</strong>. Oltre questa data non potremo gestire la procedura.
                     </p>
                   </div>
                 </div>
 
                 <div className="bg-stone-50 border border-stone-200 rounded-2xl p-6 mb-8">
                   <h4 className="font-semibold text-stone-800 mb-4 flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-lime-600" />
-                    Cosa include il servizio:
+                    <CheckCircle2 className="w-5 h-5 text-lime-600" />
+                    Cosa include il servizio gratuito:
                   </h4>
                   <ul className="space-y-3">
                     {[
@@ -419,34 +394,19 @@ export default function App() {
                       <CheckCircle2 className="w-10 h-10 text-lime-600" />
                     </div>
                     <h3 className="text-3xl font-bold mb-4 text-stone-800">Richiesta Ricevuta!</h3>
-                    <p className="text-stone-600 mb-8 max-w-sm mx-auto">
-                      Abbiamo ricevuto i tuoi dati aziendali. Per avviare ufficialmente la pratica di simulazione e presentazione della domanda, è richiesto il pagamento dell'anticipo.
+                    <p className="text-stone-600 mb-8 max-w-lg mx-auto">
+                      Abbiamo ricevuto i tuoi dati aziendali per una valutazione di pre-fattibilità gratuita. Il nostro team tecnico analizzerà la tua richiesta e ti contatterà prossimamente.
                     </p>
                     
-                    <div className="bg-stone-50 border border-stone-200 rounded-2xl p-6 mb-8 text-left">
-                      <h4 className="font-semibold text-stone-800 mb-2 flex items-center gap-2">
-                        <Lock className="w-4 h-4 text-stone-500" />
-                        Pagamento Sicuro
+                    <div className="bg-lime-50 border border-lime-200 rounded-2xl p-6 mb-8 text-left">
+                      <h4 className="font-semibold text-lime-800 mb-2 flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-lime-600" />
+                        Quali sono i prossimi passi?
                       </h4>
-                      <p className="text-sm text-stone-500 mb-4">
-                        Il pagamento viene gestito in modo sicuro tramite Stripe. Nessun dato della carta viene salvato sui nostri server.
+                      <p className="text-sm text-lime-700">
+                        Una volta valutata positivamente la tua richiesta, sarai contattato per la gestione del bando e la presentazione della pratica definitiva. Solo in quella fase verranno richiesti i fondi per la gestione della pratica.
                       </p>
-                      <div className="flex justify-between items-center border-t border-stone-200 pt-4">
-                        <span className="font-medium text-stone-700">Anticipo Avvio Pratica</span>
-                        <span className="font-bold text-xl text-stone-900">€ 250,00</span>
-                      </div>
                     </div>
-
-                    <button 
-                      onClick={handlePayment}
-                      className="w-full bg-stone-900 hover:bg-stone-800 text-white font-semibold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-stone-900/20"
-                    >
-                      <CreditCard className="w-5 h-5" />
-                      Paga l'Anticipo Ora
-                    </button>
-                    <p className="text-xs text-stone-500 mt-4">
-                      Verrai reindirizzato al portale di pagamento sicuro di Stripe.
-                    </p>
                   </div>
                 ) : (
                   <>
@@ -664,7 +624,7 @@ export default function App() {
                         <label className="flex items-start gap-3 cursor-pointer">
                           <input type="checkbox" required className="mt-1 w-4 h-4 text-lime-600 rounded border-stone-300 focus:ring-lime-500" />
                           <span className="text-sm text-stone-600 font-medium">
-                            Confermo di voler avviare la pratica e sono consapevole che il servizio richiede il pagamento di un anticipo. Accetto l'informativa sulla privacy.
+                            Confermo di voler inviare la domanda di valutazione gratuita e sono consapevole che successivamente verranno richiesti i fondi per la gestione del bando. Accetto l'informativa sulla privacy.
                           </span>
                         </label>
                       </div>
@@ -684,13 +644,13 @@ export default function App() {
                           </span>
                         ) : (
                           <>
-                            Invia e Vai al Pagamento
+                            Invia la Domanda Gratuitamente
                             <ArrowRight className="w-4 h-4" />
                           </>
                         )}
                       </button>
                       <p className="text-xs text-stone-500 text-center mt-4">
-                        Cliccando il pulsante invierai i tuoi dati e riceverai le istruzioni per il pagamento dell'anticipo.
+                        Inviando i dati accetti di ricevere istruzioni per le fasi successive del bando.
                       </p>
                     </form>
                   </>
