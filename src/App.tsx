@@ -1,683 +1,692 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { 
-  Sun, 
-  ShieldCheck, 
-  Home, 
-  BatteryCharging, 
-  Zap, 
-  ArrowRight, 
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Activity,
+  Bot,
   CheckCircle2,
-  Tractor,
-  Sprout,
-  Wheat,
-  Leaf,
-  CreditCard,
-  Lock,
-  AlertTriangle,
-  CalendarClock
+  ClipboardList,
+  FileText,
+  Globe,
+  ListChecks,
+  Newspaper,
+  Pause,
+  Play,
+  Plus,
+  RefreshCw,
+  Rss,
+  Send,
+  Settings,
+  Target,
+  Trash2,
+  XCircle,
+  Youtube,
 } from 'lucide-react';
 
-export default function App() {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [atecoError, setAtecoError] = useState(false);
-  const [intendsToInvest, setIntendsToInvest] = useState(false);
+// ----------------------------------------------------------------- tipi API
 
-  // Payment handling removed - application is now free upfront
+type Platform = 'telegram' | 'mastodon' | 'twitter' | 'facebook' | 'instagram' | 'linkedin';
+const PLATFORM_LABELS: Record<Platform, string> = {
+  telegram: 'Telegram',
+  mastodon: 'Mastodon',
+  twitter: 'X / Twitter',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  linkedin: 'LinkedIn',
+};
 
-  const handleAtecoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (e.target.value === "Altro") {
-      setAtecoError(true);
-    } else {
-      setAtecoError(false);
-    }
+interface Status {
+  engine: { running: boolean; startedAt: string | null; tasks: Record<string, { lastRunAt?: string; running: boolean }> };
+  aiAvailable: boolean;
+  platforms: Record<Platform, { enabled: boolean; configured: boolean }>;
+  counts: {
+    sources: number;
+    items: number;
+    itemsNew: number;
+    draftsPending: number;
+    approved: number;
+    published: number;
+    failed: number;
+  };
+  goals: { goal: { id: string; description: string; target: number; direction: string }; current: number; achieved: boolean }[];
+  lastRetro: { ts: string; analysis: string; playbookUpdated: boolean } | null;
+}
+
+interface Source {
+  id: string;
+  type: 'rss' | 'youtube' | 'website';
+  name: string;
+  url: string;
+  enabled: boolean;
+  lastFetchedAt?: string;
+  lastError?: string;
+}
+
+interface Post {
+  id: string;
+  platform: Platform;
+  text: string;
+  itemTitle: string;
+  itemLink: string;
+  qualityScore?: number;
+  critique?: string;
+  status: string;
+  createdAt: string;
+  scheduledAt?: string;
+  publishedAt?: string;
+  error?: string;
+}
+
+interface LogEntry {
+  ts: string;
+  level: 'info' | 'warn' | 'error';
+  scope: string;
+  message: string;
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).error ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+function timeAgo(iso?: string): string {
+  if (!iso) return 'mai';
+  const diff = Date.now() - Date.parse(iso);
+  if (diff < 60_000) return 'adesso';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min fa`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} h fa`;
+  return new Date(iso).toLocaleString('it-IT');
+}
+
+// ------------------------------------------------------------ componenti UI
+
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={`rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 ${className}`}>{children}</div>;
+}
+
+function Badge({ tone, children }: { tone: 'green' | 'red' | 'yellow' | 'zinc' | 'blue'; children: React.ReactNode }) {
+  const tones = {
+    green: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    red: 'bg-red-500/15 text-red-400 border-red-500/30',
+    yellow: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    zinc: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+    blue: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+  };
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
+}
+
+function Button({
+  onClick,
+  children,
+  variant = 'primary',
+  disabled,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+  variant?: 'primary' | 'ghost' | 'danger';
+  disabled?: boolean;
+}) {
+  const styles = {
+    primary: 'bg-emerald-600 hover:bg-emerald-500 text-white',
+    ghost: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200',
+    danger: 'bg-red-600/80 hover:bg-red-500 text-white',
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-40 ${styles[variant]}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+const SOURCE_ICONS = { rss: Rss, youtube: Youtube, website: Globe };
+
+// -------------------------------------------------------------------- viste
+
+function Overview({ status, refresh }: { status: Status; refresh: () => void }) {
+  const run = async (task: string) => {
+    await api(`/engine/run/${task}`, { method: 'POST' });
+    refresh();
+  };
+  const toggleEngine = async () => {
+    await api(`/engine/${status.engine.running ? 'stop' : 'start'}`, { method: 'POST' });
+    refresh();
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    if (atecoError) {
-      alert("Il codice ATECO inserito non è ammissibile per questo bando.");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
-
-    // Routing Logic for CRM (passed as hidden fields or just in the payload)
-    const consumo = Number(data.Consumo_Annuo_kWh);
-    let routing = "Tabella 1A (Fondo Perduto 80%) - Da verificare con consumi";
-    if (data.Investimenti_Aumento_Consumi === 'SI') {
-      routing += " (Previsti investimenti per aumento consumi)";
-    }
-    data.Routing_Suggerito = routing;
-
-    try {
-      const response = await fetch("https://formsubmit.co/ajax/facility.agrisolare@gmail.com", {
-        method: "POST",
-        headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-            _subject: "Nuova Richiesta Pre-Screening - Parco Agrisolare",
-            _template: "table",
-            ...data
-        })
-      });
-
-      if (response.ok) {
-        setIsSubmitted(true);
-      } else {
-        alert("Si è verificato un errore durante l'invio. Riprova.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Si è verificato un errore durante l'invio. Riprova.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const counts = status.counts;
+  const stats: [string, number][] = [
+    ['Fonti', counts.sources],
+    ['Contenuti raccolti', counts.items],
+    ['Da elaborare', counts.itemsNew],
+    ['Da approvare', counts.draftsPending],
+    ['Approvati in coda', counts.approved],
+    ['Pubblicati', counts.published],
+    ['Falliti', counts.failed],
+  ];
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 selection:bg-lime-500/30">
-      {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 border-b border-stone-200 bg-white/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-lime-500 to-yellow-400 flex items-center justify-center shadow-md shadow-lime-500/20">
-              <Sun className="w-5 h-5 text-white" />
+    <div className="space-y-4">
+      <Card className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Activity className={status.engine.running ? 'text-emerald-400' : 'text-zinc-500'} size={22} />
+          <div>
+            <div className="font-semibold">Motore {status.engine.running ? 'attivo 24/7' : 'in pausa'}</div>
+            <div className="text-xs text-zinc-400">
+              {status.aiAvailable ? 'AI Gemini collegata' : 'AI non configurata (GEMINI_API_KEY assente): modalità fallback + approvazione manuale'}
             </div>
-            <span className="font-semibold text-xl tracking-tight text-stone-800">AgriSolare</span>
           </div>
-          <a 
-            href="#verifica" 
-            className="hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-full bg-lime-100 text-lime-800 hover:bg-lime-200 transition-colors text-sm font-medium"
-          >
-            Avvia la Pratica
-          </a>
         </div>
-      </nav>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={toggleEngine} variant={status.engine.running ? 'danger' : 'primary'}>
+            {status.engine.running ? <Pause size={15} /> : <Play size={15} />}
+            {status.engine.running ? 'Ferma' : 'Avvia'}
+          </Button>
+          <Button onClick={() => run('ingest')} variant="ghost"><RefreshCw size={15} /> Raccogli ora</Button>
+          <Button onClick={() => run('generate')} variant="ghost"><Bot size={15} /> Genera ora</Button>
+          <Button onClick={() => run('publish')} variant="ghost"><Send size={15} /> Pubblica ora</Button>
+          <Button onClick={() => run('retro')} variant="ghost"><Target size={15} /> Retrospettiva</Button>
+        </div>
+      </Card>
 
-      <main>
-        {/* Hero Section */}
-        <section className="relative pt-40 pb-12 overflow-hidden">
-          {/* Background Glows (Light Theme) */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-lime-300/30 rounded-full blur-[120px] opacity-60 pointer-events-none" />
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-yellow-300/20 rounded-full blur-[100px] opacity-50 pointer-events-none" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+        {stats.map(([label, value]) => (
+          <Card key={label} className="text-center">
+            <div className="text-2xl font-bold">{value}</div>
+            <div className="mt-1 text-xs text-zinc-400">{label}</div>
+          </Card>
+        ))}
+      </div>
 
-          <div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-lime-200 bg-lime-50 text-lime-700 text-sm font-medium mb-8 shadow-sm"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-lime-500"></span>
+      <Card>
+        <h3 className="mb-3 flex items-center gap-2 font-semibold"><Target size={17} /> Obiettivi</h3>
+        <div className="space-y-2">
+          {status.goals.map((g) => (
+            <div key={g.goal.id} className="flex items-center justify-between gap-3 rounded-lg bg-zinc-800/50 px-3 py-2 text-sm">
+              <span>{g.goal.description}</span>
+              <span className="flex items-center gap-2 whitespace-nowrap">
+                <span className="text-zinc-400">{g.current} / {g.goal.target}</span>
+                {g.achieved ? <Badge tone="green"><CheckCircle2 size={12} /> raggiunto</Badge> : <Badge tone="yellow">in corso</Badge>}
               </span>
-              Bando PNRR 2026 Aperto
-            </motion.div>
-
-            <motion.h1 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-[60px] leading-[1.1] font-bold tracking-tight mb-6 max-w-4xl mx-auto text-stone-900"
-            >
-              L'80% a Fondo Perduto per l'<span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-600 to-yellow-500">Indipendenza Energetica</span>
-            </motion.h1>
-
-            <motion.p 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-[16px] text-stone-600 max-w-2xl mx-auto mb-10 leading-relaxed"
-            >
-              Abbatti i costi della bolletta elettrica e riqualifica le strutture della tua azienda agricola, <strong className="text-stone-900 font-medium">senza consumare un solo metro quadro di terreno coltivabile</strong>.
-            </motion.p>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4"
-            >
-              <a 
-                href="#verifica" 
-                className="w-full sm:w-auto px-8 py-4 rounded-full bg-lime-500 text-white font-semibold hover:bg-lime-600 transition-all flex items-center justify-center gap-2 group shadow-lg shadow-lime-500/25"
-              >
-                Avvia la Pratica Ora
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </a>
-              <a 
-                href="#dettagli" 
-                className="w-full sm:w-auto px-8 py-4 rounded-full border border-stone-300 hover:bg-stone-100 transition-colors font-medium text-stone-700"
-              >
-                Scopri i Dettagli
-              </a>
-            </motion.div>
-
-            {/* Hero Image - Tetto Agricolo/Stalla */}
-            <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              className="mt-16 relative max-w-5xl mx-auto rounded-3xl overflow-hidden border border-stone-200 shadow-2xl shadow-stone-900/10 h-[300px] sm:h-[400px]"
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 via-transparent to-transparent z-10" />
-              <img
-                src="https://zgssolutions.it/wp-content/uploads/2025/07/DJI_0156-scaled.jpg"
-                alt="Pannelli solari sul tetto di una struttura agricola"
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute bottom-6 left-6 z-20 flex items-center gap-2 bg-white/90 backdrop-blur-md px-4 py-2 rounded-full border border-stone-200 shadow-sm">
-                <Leaf className="w-4 h-4 text-lime-600" />
-                <span className="text-sm font-medium text-stone-800">Energia Rinnovabile sui Tetti</span>
-              </div>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* Social Proof */}
-        <section className="py-12 border-y border-stone-200 bg-white">
-          <div className="max-w-7xl mx-auto px-6 text-center">
-            <p className="text-sm font-medium text-stone-500 mb-8 uppercase tracking-widest">Già scelto da oltre 500 aziende agricole in Italia</p>
-            <div className="flex flex-wrap justify-center gap-4 sm:gap-8">
-              <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-stone-50 border border-stone-200 hover:border-lime-300 transition-colors shadow-sm">
-                <div className="w-8 h-8 rounded-full bg-lime-100 flex items-center justify-center">
-                  <Tractor className="w-4 h-4 text-lime-600" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-stone-800">Azienda Agricola La Folce</p>
-                  <p className="text-xs text-stone-500">150kW installati</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-stone-50 border border-stone-200 hover:border-yellow-300 transition-colors shadow-sm">
-                <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                  <Wheat className="w-4 h-4 text-yellow-600" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-stone-800">Tenuta Colle Urano</p>
-                  <p className="text-xs text-stone-500">200kW installati</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-stone-50 border border-stone-200 hover:border-emerald-300 transition-colors shadow-sm">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <Sprout className="w-4 h-4 text-emerald-600" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-stone-800">Le Radici</p>
-                  <p className="text-xs text-stone-500">80kW installati</p>
-                </div>
-              </div>
             </div>
-          </div>
-        </section>
-
-        {/* Features Section with Split Layout */}
-        <section id="dettagli" className="py-32 relative bg-stone-50">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center mb-20">
-              <h2 className="text-[60px] font-bold tracking-tight mb-6 text-stone-900">Cosa possiamo finanziare?</h2>
-              <p className="text-[16px] text-stone-600 max-w-2xl mx-auto">
-                Il bando non paga solo i pannelli solari, ma finanzia un pacchetto completo di riqualificazione per i tetti delle tue stalle, serre e capannoni.
-              </p>
-            </div>
-
-            <div className="grid lg:grid-cols-2 gap-12 items-start">
-              {/* Sticky Image Column - Tetto Serra/Stalla */}
-              <div className="hidden lg:block sticky top-32 h-[600px] rounded-3xl overflow-hidden border border-stone-200 shadow-xl shadow-stone-900/5">
-                <img 
-                  src="hhttps://www.repstatic.it/content/contenthub/img/2023/09/13/140954650-aba5fe2b-f32f-491e-8fac-052120276068.jpg?webp" 
-                  alt="Tetto di una serra agricola moderna" 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-stone-900/80 via-stone-900/20 to-transparent flex flex-col justify-end p-10">
-                  <div className="w-12 h-12 rounded-full bg-lime-500/90 backdrop-blur-md flex items-center justify-center mb-4 border border-lime-400 shadow-lg">
-                    <Home className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-3xl font-bold text-white mb-3">Riqualificazione Strutturale</h3>
-                  <p className="text-stone-200 text-lg leading-relaxed">
-                    Migliora l'efficienza delle tue serre e stalle. Finanziamo il rifacimento del tetto, l'isolamento e la rimozione dell'amianto.
-                  </p>
-                </div>
-              </div>
-
-              {/* Feature Cards Column */}
-              <div className="grid sm:grid-cols-2 lg:grid-cols-1 gap-6">
-                {[
-                  {
-                    icon: <Sun className="w-6 h-6 text-yellow-500" />,
-                    title: "Impianto Fotovoltaico",
-                    desc: "Installato sui tetti di stalle, capannoni, magazzini o serre. Energia pulita a costo zero per le tue attività."
-                  },
-                  {
-                    icon: <ShieldCheck className="w-6 h-6 text-lime-600" />,
-                    title: "Bonifica Amianto",
-                    desc: "Rimozione e smaltimento sicuro dell'eternit dal tetto della tua struttura agricola, tutelando salute e ambiente."
-                  },
-                  {
-                    icon: <Home className="w-6 h-6 text-emerald-500" />,
-                    title: "Rifacimento e Isolamento",
-                    desc: "Nuovo tetto, coibentazione termica e sistemi di aerazione ottimali per il benessere animale e la conservazione."
-                  },
-                  {
-                    icon: <BatteryCharging className="w-6 h-6 text-teal-500" />,
-                    title: "Sistemi di Accumulo",
-                    desc: "Batterie di ultima generazione per immagazzinare l'energia e utilizzarla anche di notte o nei picchi di consumo."
-                  },
-                  {
-                    icon: <Zap className="w-6 h-6 text-yellow-600" />,
-                    title: "Colonnine di Ricarica",
-                    desc: "Infrastrutture per la ricarica di veicoli e nuovi mezzi agricoli elettrici aziendali."
-                  }
-                ].map((feature, i) => (
-                  <motion.div 
-                    key={i}
-                    initial={{ opacity: 0, x: 20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.1 }}
-                    className="p-8 rounded-3xl bg-white border border-stone-200 hover:border-lime-300 hover:shadow-md transition-all group flex flex-col sm:flex-row gap-6 items-start"
-                  >
-                    <div className="w-14 h-14 shrink-0 rounded-2xl bg-stone-50 border border-stone-100 flex items-center justify-center group-hover:scale-110 group-hover:bg-lime-50 transition-all shadow-sm">
-                      {feature.icon}
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2 text-stone-800">{feature.title}</h3>
-                      <p className="text-[16px] text-stone-600 leading-relaxed">{feature.desc}</p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Testimonial Section */}
-        <section className="py-32 bg-lime-900 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('https://i.postimg.cc/CL4Hjb4F/Gemini-Generated-Image-mj1y80mj1y80mj1y-(1).png')] opacity-20 mix-blend-overlay object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-b from-lime-950/90 via-lime-900/80 to-lime-950/90" />
-          
-          <div className="max-w-4xl mx-auto px-6 relative z-10 text-center">
-            <div className="mb-8 flex justify-center">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <svg key={star} className="w-6 h-6 text-yellow-400 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-              ))}
-            </div>
-            <blockquote className="text-3xl sm:text-4xl font-medium leading-tight mb-10 text-white">
-              "Grazie a questo bando abbiamo azzerato i costi energetici della nostra stalla e rifatto completamente il tetto smaltendo il vecchio amianto. Un'opportunità che ogni azienda agricola dovrebbe cogliere."
-            </blockquote>
-            <div className="flex items-center justify-center gap-4">
-              <img 
-                src="https://i.postimg.cc/CL4Hjb4F/Gemini-Generated-Image-mj1y80mj1y80mj1y-(1).png" 
-                alt="Mario Rossi" 
-                className="w-14 h-14 rounded-full border-2 border-lime-400/50"
-                referrerPolicy="no-referrer"
-              />
-              <div className="text-left">
-                <div className="font-semibold text-white">Mario Rappuoli</div>
-                <div className="text-sm text-lime-200">Titolare, Azienda Agricola F.lli Rappuoli</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Form Section */}
-        <section id="verifica" className="py-32 relative bg-white">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="grid lg:grid-cols-2 gap-16 items-start">
-              <div className="sticky top-32">
-                <h2 className="text-[50px] font-bold tracking-tight mb-6 leading-tight text-stone-900">
-                  Invia la tua domanda gratuitamente
-                </h2>
-                <p className="text-[16px] text-stone-600 mb-8 leading-relaxed">
-                  Il servizio di simulazione e presentazione della fattibilità per il bando Parco Agrisolare è completamente gratuito. Compila il modulo per inviare i tuoi dati. Successivamente, in caso di esito positivo della pre-fattibilità, ti verranno richiesti i fondi per la gestione della pratica e del bando.
-                </p>
-                
-                <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 text-center sm:text-left flex flex-col sm:flex-row items-center gap-4">
-                  <div className="w-12 h-12 shrink-0 bg-red-100 rounded-full flex items-center justify-center">
-                    <CalendarClock className="w-6 h-6 text-red-600" />
-                  </div>
-                  <div>
-                    <h4 className="text-xl font-bold text-red-700 uppercase tracking-tight mb-1">Scadenza Imminente</h4>
-                    <p className="text-red-600 font-medium">
-                      Il termine ultimo per l'inserimento delle domande è <strong className="font-black text-red-800">VENERDÌ 20</strong>. Oltre questa data non potremo gestire la procedura.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-6 mb-8">
-                  <h4 className="font-semibold text-stone-800 mb-4 flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-lime-600" />
-                    Cosa include il servizio gratuito:
-                  </h4>
-                  <ul className="space-y-3">
-                    {[
-                      "Verifica di fattibilità e codice ATECO",
-                      "Dimensionamento impianto sui tuoi consumi",
-                      "Stima esatta dell'importo a Fondo Perduto",
-                      "Preparazione e invio della documentazione ufficiale"
-                    ].map((item, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-lime-500 shrink-0 mt-0.5" />
-                        <span className="text-stone-700 text-sm">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Form Card */}
-              <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-10 relative overflow-hidden shadow-2xl shadow-stone-900/5"
-              >
-                <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-100 rounded-full blur-[80px] pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-lime-100 rounded-full blur-[80px] pointer-events-none" />
-                
-                {isSubmitted ? (
-                  <div className="relative z-10 text-center py-8">
-                    <div className="w-20 h-20 bg-lime-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <CheckCircle2 className="w-10 h-10 text-lime-600" />
-                    </div>
-                    <h3 className="text-3xl font-bold mb-4 text-stone-800">Richiesta Ricevuta!</h3>
-                    <p className="text-stone-600 mb-8 max-w-lg mx-auto">
-                      Abbiamo ricevuto i tuoi dati aziendali per una valutazione di pre-fattibilità gratuita. Il nostro team tecnico analizzerà la tua richiesta e ti contatterà prossimamente.
-                    </p>
-                    
-                    <div className="bg-lime-50 border border-lime-200 rounded-2xl p-6 mb-8 text-left">
-                      <h4 className="font-semibold text-lime-800 mb-2 flex items-center gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-lime-600" />
-                        Quali sono i prossimi passi?
-                      </h4>
-                      <p className="text-sm text-lime-700">
-                        Una volta valutata positivamente la tua richiesta, sarai contattato per la gestione del bando e la presentazione della pratica definitiva. Solo in quella fase verranno richiesti i fondi per la gestione della pratica.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <h3 className="text-2xl font-semibold mb-6 text-stone-800 relative z-10">Dati Aziendali</h3>
-                    <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
-                      <div className="grid sm:grid-cols-2 gap-5">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-stone-600">Nome e Cognome</label>
-                          <input 
-                            type="text" 
-                            name="Nome"
-                            required
-                            placeholder="Mario Rossi"
-                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-stone-600">Nome Azienda Agricola</label>
-                          <input 
-                            type="text" 
-                            name="Azienda"
-                            required
-                            placeholder="Azienda Agricola Rossi"
-                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-stone-600">Codice ATECO Prevalente</label>
-                        <select 
-                          name="Codice_ATECO" 
-                          required
-                          onChange={handleAtecoChange}
-                          className={`w-full bg-stone-50 border ${atecoError ? 'border-red-500 ring-1 ring-red-500' : 'border-stone-200'} rounded-xl px-4 py-3 text-stone-800 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm appearance-none`}
-                        >
-                          <option value="">Seleziona il tuo settore ATECO...</option>
-                          <option value="01 - Coltivazioni agricole e produzione di prodotti animali">01 - Coltivazioni agricole e produzione di prodotti animali</option>
-                          <option value="02 - Silvicoltura ed utilizzo di aree forestali">02 - Silvicoltura ed utilizzo di aree forestali</option>
-                          <option value="03 - Pesca e acquacoltura">03 - Pesca e acquacoltura</option>
-                          <option value="10 - Industrie alimentari">10 - Industrie alimentari</option>
-                          <option value="11 - Industria delle bevande">11 - Industria delle bevande</option>
-                          <option value="Altro">Altro (es. Artigianato, Edilizia, Commercio)</option>
-                        </select>
-                        {atecoError && (
-                          <p className="text-sm text-red-600 flex items-start gap-1 mt-1">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            Attenzione: il codice ATECO inserito non rientra nell'elenco degli ammissibili (Allegato B). La misura è riservata a imprese agricole e agroindustriali.
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="grid sm:grid-cols-2 gap-5">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-stone-600">Data Inizio Attività (CCIAA)</label>
-                          <input 
-                            type="date" 
-                            name="Data_Inizio_Attivita"
-                            required
-                            max="2025-02-28"
-                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-stone-600">Categoria Catastale Immobile</label>
-                          <input 
-                            type="text" 
-                            name="Categoria_Catastale"
-                            required
-                            placeholder="Es. D/10"
-                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-stone-600">Titolo di Disponibilità Immobile</label>
-                        <select 
-                          name="Titolo_Disponibilita" 
-                          required
-                          className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm appearance-none"
-                        >
-                          <option value="">Seleziona...</option>
-                          <option value="Proprietà">Proprietà</option>
-                          <option value="Diritto di superficie">Diritto di superficie</option>
-                          <option value="Locazione registrata">Locazione registrata</option>
-                          <option value="Comodato d'uso registrato">Comodato d'uso registrato</option>
-                        </select>
-                      </div>
-
-                      <div className="grid sm:grid-cols-2 gap-5">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-stone-600">Consumo Annuo (kWh)</label>
-                          <input 
-                            type="number" 
-                            name="Consumo_Annuo_kWh"
-                            required
-                            placeholder="Es. 45000"
-                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-stone-600">Intenzione di investire per aumentare i consumi?</label>
-                          <select 
-                            name="Investimenti_Aumento_Consumi" 
-                            required
-                            onChange={(e) => setIntendsToInvest(e.target.value === 'SI')}
-                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm appearance-none"
-                          >
-                            <option value="">Seleziona...</option>
-                            <option value="SI">SI</option>
-                            <option value="NO">NO</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {intendsToInvest && (
-                        <div className="bg-lime-50 border border-lime-200 rounded-xl p-4 text-sm text-lime-800 flex items-start gap-3">
-                          <AlertTriangle className="w-5 h-5 shrink-0 text-lime-600 mt-0.5" />
-                          <p>
-                            <strong>Nota bene:</strong> Poiché hai intenzione di effettuare investimenti per aumentare i consumi, sarai contattato da un nostro consulente per approfondire i dettagli e valutare il corretto dimensionamento dell'impianto.
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-stone-600">Rimozione Amianto da smaltire?</label>
-                        <select 
-                          name="Rimozione_Amianto" 
-                          required
-                          className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm appearance-none"
-                        >
-                          <option value="">Seleziona...</option>
-                          <option value="SI">SI</option>
-                          <option value="NO">NO</option>
-                        </select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-stone-600">Email</label>
-                        <input 
-                          type="email" 
-                          name="Email"
-                          required
-                          placeholder="mario@esempio.it"
-                          className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-stone-600">Telefono</label>
-                        <input 
-                          type="tel" 
-                          name="Telefono"
-                          required
-                          placeholder="+39 333 1234567"
-                          className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all shadow-sm"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-stone-600">Dettagli Intervento (Opzionale)</label>
-                        <textarea 
-                          name="Note"
-                          rows={3}
-                          placeholder="Es. Ho una stalla con tetto in eternit da smaltire..."
-                          className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500 transition-all resize-none shadow-sm"
-                        />
-                      </div>
-
-                      <div className="space-y-4 pt-4 border-t border-stone-200">
-                        <h4 className="font-semibold text-stone-800">Dichiarazioni e Requisiti</h4>
-                        
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input type="checkbox" required className="mt-1 w-4 h-4 text-lime-600 rounded border-stone-300 focus:ring-lime-500" />
-                          <span className="text-sm text-stone-600">
-                            Dichiaro di avere un volume d'affari annuo &gt; 7.000 € e di NON essere in regime di esonero IVA.
-                          </span>
-                        </label>
-                        
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input type="checkbox" required className="mt-1 w-4 h-4 text-lime-600 rounded border-stone-300 focus:ring-lime-500" />
-                          <span className="text-sm text-stone-600">
-                            Dichiaro che l'impresa è attiva e regolarmente iscritta al Registro delle Imprese.
-                          </span>
-                        </label>
-
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input type="checkbox" required className="mt-1 w-4 h-4 text-lime-600 rounded border-stone-300 focus:ring-lime-500" />
-                          <span className="text-sm text-stone-600">
-                            Dichiaro che l'impresa NON è in difficoltà ai sensi del Regolamento GBER e non è soggetta a procedure concorsuali.
-                          </span>
-                        </label>
-
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input type="checkbox" required className="mt-1 w-4 h-4 text-lime-600 rounded border-stone-300 focus:ring-lime-500" />
-                          <span className="text-sm text-stone-600">
-                            Confermo che l'impianto sarà installato su copertura di fabbricato esistente o serra (non a terra).
-                          </span>
-                        </label>
-                      </div>
-
-                      <div className="space-y-4 pt-4 border-t border-stone-200">
-                        <h4 className="font-semibold text-stone-800">Checklist Documentale</h4>
-                        <p className="text-sm text-stone-500">Dichiaro di avere a disposizione i seguenti documenti (da caricare successivamente):</p>
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input type="checkbox" required className="mt-1 w-4 h-4 text-lime-600 rounded border-stone-300 focus:ring-lime-500" />
-                          <span className="text-sm text-stone-600">
-                            Visura Camerale aggiornata (Max 6 mesi), Documento d'identità del Legale Rappresentante, Titolo di disponibilità dell'immobile, Bollette elettriche.
-                          </span>
-                        </label>
-                      </div>
-
-                      <div className="pt-4 border-t border-stone-200">
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input type="checkbox" required className="mt-1 w-4 h-4 text-lime-600 rounded border-stone-300 focus:ring-lime-500" />
-                          <span className="text-sm text-stone-600 font-medium">
-                            Confermo di voler inviare la domanda di valutazione gratuita e sono consapevole che successivamente verranno richiesti i fondi per la gestione del bando. Accetto l'informativa sulla privacy.
-                          </span>
-                        </label>
-                      </div>
-
-                      <button 
-                        type="submit" 
-                        disabled={isSubmitting || atecoError}
-                        className="w-full bg-lime-500 hover:bg-lime-600 disabled:bg-lime-400 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-xl transition-colors mt-4 flex items-center justify-center gap-2 shadow-lg shadow-lime-500/20"
-                      >
-                        {isSubmitting ? (
-                          <span className="flex items-center gap-2">
-                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Invio in corso...
-                          </span>
-                        ) : (
-                          <>
-                            Invia la Domanda Gratuitamente
-                            <ArrowRight className="w-4 h-4" />
-                          </>
-                        )}
-                      </button>
-                      <p className="text-xs text-stone-500 text-center mt-4">
-                        Inviando i dati accetti di ricevere istruzioni per le fasi successive del bando.
-                      </p>
-                    </form>
-                  </>
-                )}
-              </motion.div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-stone-200 py-12 bg-stone-50">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Sun className="w-5 h-5 text-lime-600" />
-            <span className="font-semibold text-lg text-stone-800">AgriSolare</span>
-          </div>
-          <p className="text-sm text-stone-500">
-            © 2026 AgriSolare. Tutti i diritti riservati. Landing page per Bando Parco Agrisolare.
-          </p>
-          <div className="flex gap-4 text-sm text-stone-500">
-            <a href="#" className="hover:text-stone-700 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-stone-700 transition-colors">Termini</a>
-          </div>
+          ))}
         </div>
-      </footer>
+      </Card>
+
+      <Card>
+        <h3 className="mb-2 font-semibold">Piattaforme</h3>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(status.platforms) as Platform[]).map((p) => {
+            const info = status.platforms[p];
+            return (
+              <Badge key={p} tone={!info.enabled ? 'zinc' : info.configured ? 'green' : 'blue'}>
+                {PLATFORM_LABELS[p]} · {!info.enabled ? 'disattivata' : info.configured ? 'reale' : 'simulazione'}
+              </Badge>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs text-zinc-500">
+          Le piattaforme senza credenziali in .env pubblicano in modalità simulazione: il flusso completo resta attivo e verificabile.
+        </p>
+      </Card>
+
+      {status.lastRetro && (
+        <Card>
+          <h3 className="mb-2 font-semibold">Ultima retrospettiva · {timeAgo(status.lastRetro.ts)}</h3>
+          <p className="text-sm text-zinc-300">{status.lastRetro.analysis}</p>
+          {status.lastRetro.playbookUpdated && <Badge tone="green">playbook aggiornato</Badge>}
+        </Card>
+      )}
     </div>
   );
 }
 
+function SourcesView() {
+  const [sources, setSources] = useState<Source[]>([]);
+  const [type, setType] = useState<'rss' | 'youtube' | 'website'>('rss');
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => api<Source[]>('/sources').then(setSources).catch(() => {}), []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const add = async () => {
+    setError('');
+    try {
+      await api('/sources', { method: 'POST', body: JSON.stringify({ type, name, url }) });
+      setName('');
+      setUrl('');
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const placeholders = {
+    rss: 'https://esempio.it/feed.xml',
+    youtube: 'https://www.youtube.com/@nomecanale (o channel ID UC...)',
+    website: 'https://esempio.it/blog',
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <h3 className="mb-3 flex items-center gap-2 font-semibold"><Plus size={17} /> Aggiungi fonte</h3>
+        <div className="flex flex-wrap items-end gap-2">
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as any)}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          >
+            <option value="rss">Feed RSS</option>
+            <option value="youtube">Canale YouTube</option>
+            <option value="website">Sito web</option>
+          </select>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nome (opzionale)"
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          />
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder={placeholders[type]}
+            className="min-w-72 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          />
+          <Button onClick={add} disabled={!url}><Plus size={15} /> Aggiungi</Button>
+        </div>
+        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+      </Card>
+
+      <div className="space-y-2">
+        {sources.length === 0 && (
+          <Card className="text-center text-sm text-zinc-400">
+            Nessuna fonte configurata. Aggiungi feed RSS, canali YouTube o siti: l'agenzia inizierà a raccogliere e pubblicare da sola.
+          </Card>
+        )}
+        {sources.map((s) => {
+          const Icon = SOURCE_ICONS[s.type];
+          return (
+            <Card key={s.id} className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Icon size={18} className="shrink-0 text-zinc-400" />
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{s.name}</div>
+                  <div className="truncate text-xs text-zinc-500">{s.url}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {s.lastError ? (
+                  <Badge tone="red">errore: {s.lastError.slice(0, 60)}</Badge>
+                ) : (
+                  <Badge tone="zinc">aggiornata {timeAgo(s.lastFetchedAt)}</Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={async () => {
+                    await api(`/sources/${s.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !s.enabled }) });
+                    load();
+                  }}
+                >
+                  {s.enabled ? 'Sospendi' : 'Riattiva'}
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={async () => {
+                    if (!confirm(`Rimuovere la fonte "${s.name}"?`)) return;
+                    await api(`/sources/${s.id}`, { method: 'DELETE' });
+                    load();
+                  }}
+                >
+                  <Trash2 size={15} />
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PostCard({ post, onAction }: { post: Post; onAction?: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(post.text);
+
+  const act = async (action: 'approve' | 'reject') => {
+    await api(`/posts/${post.id}/${action}`, { method: 'POST' });
+    onAction?.();
+  };
+  const saveEdit = async () => {
+    await api(`/posts/${post.id}`, { method: 'PATCH', body: JSON.stringify({ text }) });
+    setEditing(false);
+    onAction?.();
+  };
+
+  const statusTone: Record<string, 'green' | 'red' | 'yellow' | 'zinc' | 'blue'> = {
+    draft: 'yellow',
+    approved: 'blue',
+    published: 'green',
+    simulated: 'zinc',
+    failed: 'red',
+    rejected: 'red',
+  };
+  const statusLabel: Record<string, string> = {
+    draft: 'da approvare',
+    approved: 'in coda',
+    published: 'pubblicato',
+    simulated: 'simulato',
+    failed: 'fallito',
+    rejected: 'scartato',
+  };
+
+  return (
+    <Card>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge tone="blue">{PLATFORM_LABELS[post.platform]}</Badge>
+        <Badge tone={statusTone[post.status] ?? 'zinc'}>{statusLabel[post.status] ?? post.status}</Badge>
+        {typeof post.qualityScore === 'number' && (
+          <Badge tone={post.qualityScore >= 8 ? 'green' : post.qualityScore >= 6 ? 'yellow' : 'red'}>
+            qualità {post.qualityScore}/10
+          </Badge>
+        )}
+        <span className="ml-auto text-xs text-zinc-500">{timeAgo(post.publishedAt ?? post.scheduledAt ?? post.createdAt)}</span>
+      </div>
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-2 text-sm"
+          />
+          <div className="flex gap-2">
+            <Button onClick={saveEdit}>Salva</Button>
+            <Button variant="ghost" onClick={() => setEditing(false)}>Annulla</Button>
+          </div>
+        </div>
+      ) : (
+        <p className="whitespace-pre-wrap text-sm text-zinc-200">{post.text}</p>
+      )}
+      <div className="mt-2 truncate text-xs text-zinc-500">
+        Fonte: <a href={post.itemLink} target="_blank" rel="noreferrer" className="underline hover:text-zinc-300">{post.itemTitle}</a>
+      </div>
+      {post.critique && <div className="mt-1 text-xs text-zinc-500">Revisore: {post.critique}</div>}
+      {post.error && <div className="mt-1 text-xs text-red-400">Errore: {post.error}</div>}
+      {(post.status === 'draft' || post.status === 'failed') && !editing && (
+        <div className="mt-3 flex gap-2">
+          <Button onClick={() => act('approve')}><CheckCircle2 size={15} /> Approva e pubblica</Button>
+          <Button variant="ghost" onClick={() => setEditing(true)}>Modifica</Button>
+          <Button variant="danger" onClick={() => act('reject')}><XCircle size={15} /> Scarta</Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function QueueView() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const load = useCallback(
+    () =>
+      api<Post[]>('/posts?limit=200')
+        .then((all) => setPosts(all.filter((p) => p.status === 'draft' || p.status === 'approved' || p.status === 'failed')))
+        .catch(() => {}),
+    [],
+  );
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 8000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  return (
+    <div className="space-y-3">
+      {posts.length === 0 && <Card className="text-center text-sm text-zinc-400">Nessun post in coda. Le bozze generate dal motore appariranno qui.</Card>}
+      {posts.map((p) => <PostCard key={p.id} post={p} onAction={load} />)}
+    </div>
+  );
+}
+
+function PublishedView() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const load = useCallback(
+    () =>
+      api<Post[]>('/posts?limit=200')
+        .then((all) => setPosts(all.filter((p) => p.status === 'published' || p.status === 'simulated' || p.status === 'rejected')))
+        .catch(() => {}),
+    [],
+  );
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  return (
+    <div className="space-y-3">
+      {posts.length === 0 && <Card className="text-center text-sm text-zinc-400">Ancora nessun post pubblicato.</Card>}
+      {posts.map((p) => <PostCard key={p.id} post={p} onAction={load} />)}
+    </div>
+  );
+}
+
+function PlaybookView() {
+  const [playbook, setPlaybook] = useState('');
+  const [retros, setRetros] = useState<{ ts: string; analysis: string; playbookUpdated: boolean }[]>([]);
+  useEffect(() => {
+    api<{ playbook: string }>('/playbook').then((r) => setPlaybook(r.playbook)).catch(() => {});
+    api<{ ts: string; analysis: string; playbookUpdated: boolean }[]>('/retros').then(setRetros).catch(() => {});
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <h3 className="mb-2 flex items-center gap-2 font-semibold"><FileText size={17} /> Playbook editoriale (auto-aggiornato)</h3>
+        <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-300">{playbook || 'Caricamento…'}</pre>
+      </Card>
+      <Card>
+        <h3 className="mb-3 font-semibold">Storico retrospettive</h3>
+        {retros.length === 0 && <p className="text-sm text-zinc-400">La prima retrospettiva verrà eseguita automaticamente dal motore.</p>}
+        <div className="space-y-2">
+          {retros.map((r) => (
+            <div key={r.ts} className="rounded-lg bg-zinc-800/50 p-3 text-sm">
+              <div className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
+                {new Date(r.ts).toLocaleString('it-IT')}
+                {r.playbookUpdated && <Badge tone="green">playbook aggiornato</Badge>}
+              </div>
+              {r.analysis}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function SettingsView() {
+  const [config, setConfig] = useState<any>(null);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    api('/config').then(setConfig).catch(() => {});
+  }, []);
+
+  if (!config) return <Card>Caricamento…</Card>;
+
+  const save = async () => {
+    await api('/config', { method: 'PUT', body: JSON.stringify(config) });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  const set = (patch: any) => setConfig({ ...config, ...patch });
+
+  const input = 'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm';
+  const label = 'mb-1 block text-xs font-medium text-zinc-400';
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <h3 className="mb-3 font-semibold">Identità del brand</h3>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div><label className={label}>Nome</label><input className={input} value={config.brand.name} onChange={(e) => set({ brand: { ...config.brand, name: e.target.value } })} /></div>
+          <div><label className={label}>Lingua</label><input className={input} value={config.brand.language} onChange={(e) => set({ brand: { ...config.brand, language: e.target.value } })} /></div>
+          <div className="md:col-span-2"><label className={label}>Missione</label><textarea rows={2} className={input} value={config.brand.mission} onChange={(e) => set({ brand: { ...config.brand, mission: e.target.value } })} /></div>
+          <div><label className={label}>Tono di voce</label><input className={input} value={config.brand.tone} onChange={(e) => set({ brand: { ...config.brand, tone: e.target.value } })} /></div>
+          <div><label className={label}>Pubblico</label><input className={input} value={config.brand.audience} onChange={(e) => set({ brand: { ...config.brand, audience: e.target.value } })} /></div>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="mb-3 font-semibold">Automazione</h3>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div>
+            <label className={label}>Pubblicazione automatica</label>
+            <select className={input} value={String(config.autoPublish)} onChange={(e) => set({ autoPublish: e.target.value === 'true' })}>
+              <option value="true">Sì: pubblica da sola se la qualità supera la soglia</option>
+              <option value="false">No: ogni post richiede approvazione manuale</option>
+            </select>
+          </div>
+          <div><label className={label}>Soglia qualità (1-10)</label><input type="number" min={1} max={10} className={input} value={config.qualityThreshold} onChange={(e) => set({ qualityThreshold: Number(e.target.value) })} /></div>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <div><label className={label}>Raccolta fonti (min)</label><input type="number" min={2} className={input} value={config.intervals.ingestMinutes} onChange={(e) => set({ intervals: { ...config.intervals, ingestMinutes: Number(e.target.value) } })} /></div>
+          <div><label className={label}>Generazione (min)</label><input type="number" min={1} className={input} value={config.intervals.generateMinutes} onChange={(e) => set({ intervals: { ...config.intervals, generateMinutes: Number(e.target.value) } })} /></div>
+          <div><label className={label}>Pubblicazione (min)</label><input type="number" min={1} className={input} value={config.intervals.publishMinutes} onChange={(e) => set({ intervals: { ...config.intervals, publishMinutes: Number(e.target.value) } })} /></div>
+          <div><label className={label}>Retrospettiva (ore)</label><input type="number" min={1} className={input} value={config.intervals.retroHours} onChange={(e) => set({ intervals: { ...config.intervals, retroHours: Number(e.target.value) } })} /></div>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="mb-3 font-semibold">Piattaforme</h3>
+        <div className="grid gap-2 md:grid-cols-2">
+          {(Object.keys(PLATFORM_LABELS) as Platform[]).map((p) => (
+            <div key={p} className="flex items-center justify-between gap-2 rounded-lg bg-zinc-800/50 px-3 py-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={config.platforms[p].enabled}
+                  onChange={(e) => set({ platforms: { ...config.platforms, [p]: { ...config.platforms[p], enabled: e.target.checked } } })}
+                />
+                {PLATFORM_LABELS[p]}
+              </label>
+              <label className="flex items-center gap-2 text-xs text-zinc-400">
+                max/giorno
+                <input
+                  type="number"
+                  min={1}
+                  max={48}
+                  className="w-16 rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm"
+                  value={config.platforms[p].maxPostsPerDay}
+                  onChange={(e) => set({ platforms: { ...config.platforms, [p]: { ...config.platforms[p], maxPostsPerDay: Number(e.target.value) } } })}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-zinc-500">Le credenziali si impostano nel file .env (vedi .env.example): senza credenziali la piattaforma lavora in simulazione.</p>
+      </Card>
+
+      <div className="flex items-center gap-3">
+        <Button onClick={save}>Salva impostazioni</Button>
+        {saved && <span className="text-sm text-emerald-400">Salvato ✓</span>}
+      </div>
+    </div>
+  );
+}
+
+function LogsView() {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  useEffect(() => {
+    const load = () => api<LogEntry[]>('/logs').then(setLogs).catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const tone = { info: 'text-zinc-300', warn: 'text-amber-400', error: 'text-red-400' };
+  return (
+    <Card>
+      <div className="max-h-[70vh] space-y-1 overflow-y-auto font-mono text-xs">
+        {logs.map((l, i) => (
+          <div key={i} className={tone[l.level]}>
+            <span className="text-zinc-600">{new Date(l.ts).toLocaleTimeString('it-IT')}</span>{' '}
+            <span className="text-zinc-500">[{l.scope}]</span> {l.message}
+          </div>
+        ))}
+        {logs.length === 0 && <span className="text-zinc-500">Nessun log.</span>}
+      </div>
+    </Card>
+  );
+}
+
+// --------------------------------------------------------------------- app
+
+const TABS = [
+  { id: 'overview', label: 'Panoramica', icon: Activity },
+  { id: 'sources', label: 'Fonti', icon: Newspaper },
+  { id: 'queue', label: 'Coda', icon: ClipboardList },
+  { id: 'published', label: 'Pubblicati', icon: ListChecks },
+  { id: 'playbook', label: 'Playbook', icon: FileText },
+  { id: 'settings', label: 'Impostazioni', icon: Settings },
+  { id: 'logs', label: 'Log', icon: Bot },
+] as const;
+
+export default function App() {
+  const [tab, setTab] = useState<(typeof TABS)[number]['id']>('overview');
+  const [status, setStatus] = useState<Status | null>(null);
+
+  const refresh = useCallback(() => api<Status>('/status').then(setStatus).catch(() => {}), []);
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 6000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">🤖 Agenzia Social Autonoma</h1>
+          <p className="text-sm text-zinc-400">Raccoglie dalle tue fonti, scrive, controlla la qualità e pubblica sui social, 24 ore su 24.</p>
+        </div>
+        {status && (
+          <Badge tone={status.engine.running ? 'green' : 'zinc'}>
+            {status.engine.running ? '● motore attivo' : '○ motore in pausa'}
+          </Badge>
+        )}
+      </header>
+
+      <nav className="mb-6 flex flex-wrap gap-1 rounded-xl border border-zinc-800 bg-zinc-900/60 p-1">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
+              tab === id ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+            }`}
+          >
+            <Icon size={15} /> {label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === 'overview' && (status ? <Overview status={status} refresh={refresh} /> : <Card>Caricamento…</Card>)}
+      {tab === 'sources' && <SourcesView />}
+      {tab === 'queue' && <QueueView />}
+      {tab === 'published' && <PublishedView />}
+      {tab === 'playbook' && <PlaybookView />}
+      {tab === 'settings' && <SettingsView />}
+      {tab === 'logs' && <LogsView />}
+    </div>
+  );
+}
