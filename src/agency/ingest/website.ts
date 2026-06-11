@@ -1,8 +1,8 @@
 import type { ContentItem, Source } from '../types.ts';
-import { fetchFeedItems } from './rss.ts';
+import { BROWSER_UA, fetchFeedItems } from './rss.ts';
 import { hashLink } from '../store.ts';
 
-const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; AgenziaSocialAutonoma/1.0)' };
+const UA = { 'User-Agent': BROWSER_UA };
 
 // Cache: URL sito -> URL feed scoperto via autodiscovery (o '' se assente).
 const discoveredFeeds = new Map<string, string>();
@@ -26,14 +26,39 @@ function decodeEntities(s: string): string {
     .trim();
 }
 
+// Percorsi feed convenzionali (WordPress e simili), provati come ripiego.
+const COMMON_FEED_PATHS = ['feed/', 'feed', 'rss/', 'rss.xml', 'feed.xml', 'atom.xml', 'index.xml'];
+
+async function tryCommonFeedPaths(source: Source): Promise<ContentItem[] | null> {
+  for (const p of COMMON_FEED_PATHS) {
+    const feedUrl = absolutize(p, source.url);
+    try {
+      const items = await fetchFeedItems(source, feedUrl);
+      if (items.length > 0) {
+        discoveredFeeds.set(source.url, feedUrl);
+        return items;
+      }
+    } catch {
+      // Percorso inesistente: si prova il successivo.
+    }
+  }
+  return null;
+}
+
 // Strategia: 1) cerca un feed RSS/Atom dichiarato nella pagina (autodiscovery);
-// 2) in mancanza, estrae i link "ad articolo" dalla pagina con euristiche.
+// 2) prova i percorsi feed convenzionali (/feed, /rss, ...);
+// 3) in mancanza, estrae i link "ad articolo" dalla pagina con euristiche.
 export async function fetchWebsiteItems(source: Source): Promise<ContentItem[]> {
   const known = discoveredFeeds.get(source.url);
   if (known) return fetchFeedItems(source, known);
 
   const res = await fetch(source.url, { headers: UA });
-  if (!res.ok) throw new Error(`Sito non raggiungibile (HTTP ${res.status})`);
+  if (!res.ok) {
+    // Homepage protetta o irraggiungibile: il feed potrebbe comunque rispondere.
+    const viaFeed = await tryCommonFeedPaths(source);
+    if (viaFeed) return viaFeed;
+    throw new Error(`Sito non raggiungibile (HTTP ${res.status})`);
+  }
   const html = await res.text();
 
   if (known === undefined) {
@@ -48,9 +73,11 @@ export async function fetchWebsiteItems(source: Source): Promise<ContentItem[]> 
         discoveredFeeds.set(source.url, feedUrl);
         return items;
       } catch {
-        // Il feed dichiarato non funziona: si procede con l'estrazione dei link.
+        // Il feed dichiarato non funziona: si prova con i percorsi convenzionali.
       }
     }
+    const viaFeed = await tryCommonFeedPaths(source);
+    if (viaFeed) return viaFeed;
     discoveredFeeds.set(source.url, '');
   }
 

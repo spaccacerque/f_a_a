@@ -15,12 +15,13 @@ function defaultConfig(): AgencyConfig {
     brand: {
       name: 'Agenzia Social Autonoma',
       mission:
-        'Informare e far crescere la comunità online con contenuti curati, utili e verificati, selezionati dalle migliori fonti.',
-      tone: 'professionale ma accessibile, positivo, concreto',
+        'Informare la comunità sulle auto elettriche e sul mercato automobilistico cinese: nuovi modelli, dati di vendita, batterie e tecnologia, con contenuti curati e verificati dalle migliori fonti di settore.',
+      tone: 'professionale ma accessibile, appassionato, concreto',
       language: 'italiano',
-      audience: 'comunità online interessata ai temi delle fonti configurate',
+      audience: 'appassionati di auto elettriche e curiosi del mercato auto cinese',
     },
-    interests: '',
+    interests:
+      'auto elettriche, EV, mercato auto cinese, nuovi modelli, batterie, ricarica, dati di vendita e immatricolazioni, BYD, NIO, Xpeng, Geely, Zeekr, Tesla, ibride plug-in, guida autonoma, prezzi e listini',
     autoPublish: false,
     qualityThreshold: 7,
     relevanceThreshold: 6,

@@ -1,5 +1,5 @@
 import type { ContentItem, Source } from '../types.ts';
-import { fetchFeedItems } from './rss.ts';
+import { BROWSER_UA, fetchFeedItems } from './rss.ts';
 
 // Cache: URL del canale -> URL del feed RSS risolto.
 const feedUrlCache = new Map<string, string>();
@@ -22,7 +22,7 @@ export async function resolveYouTubeFeedUrl(input: string): Promise<string> {
     pageUrl = `https://www.youtube.com/${pageUrl.startsWith('@') ? pageUrl : '@' + pageUrl}`;
   }
   const res = await fetch(pageUrl, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AgenziaSocialAutonoma/1.0)' },
+    headers: { 'User-Agent': BROWSER_UA },
   });
   if (!res.ok) throw new Error(`Pagina canale non raggiungibile (HTTP ${res.status})`);
   const html = await res.text();

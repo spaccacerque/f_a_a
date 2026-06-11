@@ -40,6 +40,19 @@ La ricerca gira tutti i giorni e lavora **12 articoli al giorno** (configurabile
 Il campo **Interessi e temi** nelle Impostazioni guida il curatore: i contenuti delle
 fonti fuori tema vengono scartati con motivazione visibile.
 
+## Fonti predefinite
+
+Alla prima accensione l'agenzia è già configurata sul tema **auto elettriche e mercato
+auto cinese** con tre fonti (gestibili dalla scheda Fonti):
+
+- [CarNewsChina](https://carnewschina.com/)
+- [CnEVPost](https://cnevpost.com/)
+- [The Electric Viking](https://theelectricviking.com/)
+
+Il feed RSS di ogni sito viene scoperto automaticamente (autodiscovery dalla homepage o
+percorsi convenzionali `/feed`, `/rss`, ...). Interessi, missione e tono di voce
+predefiniti sono allineati a queste fonti e restano personalizzabili dalle Impostazioni.
+
 ## Piattaforme supportate
 
 Telegram, Mastodon, X/Twitter, Facebook, Instagram, LinkedIn.

@@ -2,9 +2,13 @@ import Parser from 'rss-parser';
 import type { ContentItem, Source } from '../types.ts';
 import { hashLink } from '../store.ts';
 
+// User-agent da browser: molti siti di news (CDN/anti-bot) rifiutano i client generici.
+export const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
 const parser = new Parser({
   timeout: 20000,
-  headers: { 'User-Agent': 'AgenziaSocialAutonoma/1.0 (+content-curation-bot)' },
+  headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8' },
   customFields: {
     item: [
       ['media:thumbnail', 'mediaThumbnail'],

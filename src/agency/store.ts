@@ -4,6 +4,32 @@ import crypto from 'crypto';
 import type { ContentItem, PostDraft, RetroReport, Source } from './types.ts';
 import { logger } from './logger.ts';
 
+// Fonti configurate alla prima accensione (modificabili/rimovibili dalla dashboard).
+// Tipo "website": il feed RSS viene scoperto automaticamente dalla homepage.
+const SEED_SOURCES: Omit<Source, 'id'>[] = [
+  {
+    type: 'website',
+    name: 'CarNewsChina',
+    url: 'https://carnewschina.com/',
+    enabled: true,
+    tags: ['auto elettriche', 'mercato cinese'],
+  },
+  {
+    type: 'website',
+    name: 'CnEVPost',
+    url: 'https://cnevpost.com/',
+    enabled: true,
+    tags: ['auto elettriche', 'mercato cinese'],
+  },
+  {
+    type: 'website',
+    name: 'The Electric Viking',
+    url: 'https://theelectricviking.com/',
+    enabled: true,
+    tags: ['auto elettriche'],
+  },
+];
+
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const PLAYBOOK_FILE = path.join(DATA_DIR, 'playbook.md');
@@ -49,14 +75,25 @@ export function hashLink(link: string): string {
 
 export function loadStore() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (fs.existsSync(DB_FILE)) {
+  let needSeed = !fs.existsSync(DB_FILE);
+  if (!needSeed) {
     try {
       const saved = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
       db = { ...db, ...saved, stats: { ...db.stats, ...saved.stats } };
       logger.info('store', `Database caricato: ${db.sources.length} fonti, ${db.items.length} contenuti, ${db.posts.length} post`);
     } catch (e: any) {
       logger.error('store', `Database corrotto, riparto da zero: ${e.message}`);
+      needSeed = true;
     }
+  }
+  if (needSeed) {
+    for (const seed of SEED_SOURCES) {
+      if (!db.sources.some((s) => s.url === seed.url)) {
+        db.sources.push({ id: newId(), ...seed });
+      }
+    }
+    logger.info('store', `Fonti predefinite configurate: ${SEED_SOURCES.map((s) => s.name).join(', ')}`);
+    saveStore();
   }
   if (!fs.existsSync(PLAYBOOK_FILE)) {
     fs.writeFileSync(PLAYBOOK_FILE, DEFAULT_PLAYBOOK);
