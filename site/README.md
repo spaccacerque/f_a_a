@@ -18,13 +18,16 @@ Tutto il catalogo vive in **`data/vehicles.json`**. Per ogni auto:
 | `priceEur` | Prezzo mostrato (es. listino nextora.it per le auto del carosello) |
 | `competitorPriceEur` | Prezzo del concorrente (auto-china.com): se `priceEur` è `null`, il sito mostra automaticamente **questo prezzo scontato del 5%** (campo `discountVsCompetitorPct`), con il prezzo pieno barrato accanto |
 | entrambi `null` | Mostra "Prezzo su richiesta" |
+| `powertrain` | Alimentazione (`Full Electric`, `Hybrid`, `EREV`, `EV / EREV`): alimenta il filtro "Tutte le alimentazioni" del catalogo |
 | `featured` | `true` = l'auto appare nel carosello in homepage |
 | `image` | percorso immagine in `img/` (vuoto = segnaposto grafico col nome del modello) |
 | `badge` | etichetta sulla foto (es. "Pronta consegna") |
 
-Le 4 auto presenti sono **segnaposto con prezzo nullo**: vanno sostituite con le auto
-reali del carosello di nextora.it (con i loro prezzi in `priceEur`) e con i modelli di
-auto-china.com (con i loro prezzi in `competitorPriceEur` per lo sconto automatico del 5%).
+Il catalogo contiene i dati reali rilevati l'11/06/2026: le 23 auto del carosello di
+nextora.it/veicoli_elettrici.html (prezzi in `priceEur`, `featured: true`) e i 19 modelli
+di auto-china.com/it-it (prezzi "a partire da", netto IVA, in `competitorPriceEur`).
+Xiaomi YU7, Audi E5 e Zeekr 9X compaiono su entrambi i listini: sono un'unica scheda con
+entrambi i prezzi (il sito mostra `priceEur`).
 
 ## Form preventivo
 

@@ -38,7 +38,7 @@
         <div class="car-img">${img}${v.badge ? `<span class="car-badge">${v.badge}</span>` : ''}</div>
         <div class="car-body">
           <div class="car-title">${v.brand} ${v.model}</div>
-          <div class="car-version">${v.version ?? ''} · ${v.year ?? ''}</div>
+          <div class="car-version">${[v.version, v.powertrain, v.year].filter(Boolean).join(' · ')}</div>
           <div class="car-specs">
             ${v.rangeKm ? `<span>🔋 ${v.rangeKm} km</span>` : ''}
             ${v.batteryKwh ? `<span>${v.batteryKwh} kWh</span>` : ''}
@@ -67,6 +67,7 @@
   // ----- Filtri catalogo
   const brandSel = document.getElementById('filterBrand');
   const bodySel = document.getElementById('filterBody');
+  const powertrainSel = document.getElementById('filterPowertrain');
   const sortSel = document.getElementById('filterSort');
   for (const b of [...new Set(data.vehicles.map((v) => v.brand))].sort()) {
     brandSel.insertAdjacentHTML('beforeend', `<option>${b}</option>`);
@@ -74,11 +75,17 @@
   for (const b of [...new Set(data.vehicles.map((v) => v.bodyType).filter(Boolean))].sort()) {
     bodySel.insertAdjacentHTML('beforeend', `<option>${b}</option>`);
   }
+  for (const p of [...new Set(data.vehicles.map((v) => v.powertrain).filter(Boolean))].sort()) {
+    powertrainSel.insertAdjacentHTML('beforeend', `<option>${p}</option>`);
+  }
 
   const catalog = document.getElementById('catalog');
   function renderCatalog() {
     let list = data.vehicles.filter(
-      (v) => (!brandSel.value || v.brand === brandSel.value) && (!bodySel.value || v.bodyType === bodySel.value),
+      (v) =>
+        (!brandSel.value || v.brand === brandSel.value) &&
+        (!bodySel.value || v.bodyType === bodySel.value) &&
+        (!powertrainSel.value || v.powertrain === powertrainSel.value),
     );
     const sort = sortSel.value;
     list.sort((a, b) =>
@@ -91,7 +98,7 @@
       : '<p class="catalog-empty">Nessuna auto corrisponde ai filtri.</p>';
     bindQuoteLinks();
   }
-  brandSel.onchange = bodySel.onchange = sortSel.onchange = renderCatalog;
+  brandSel.onchange = bodySel.onchange = powertrainSel.onchange = sortSel.onchange = renderCatalog;
   renderCatalog();
 
   // ----- Form preventivo

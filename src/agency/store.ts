@@ -22,9 +22,11 @@ const SEED_SOURCES: Omit<Source, 'id'>[] = [
     tags: ['auto elettriche', 'mercato cinese'],
   },
   {
-    type: 'website',
+    // theelectricviking.com risponde 403 (anti-bot) ai client non interattivi:
+    // si usa il feed RSS del canale YouTube, sempre raggiungibile.
+    type: 'youtube',
     name: 'The Electric Viking',
-    url: 'https://theelectricviking.com/',
+    url: 'https://www.youtube.com/channel/UCpmKt6QENP7qQV1YeGtmDhA',
     enabled: true,
     tags: ['auto elettriche'],
   },

@@ -22,7 +22,9 @@ export async function resolveYouTubeFeedUrl(input: string): Promise<string> {
     pageUrl = `https://www.youtube.com/${pageUrl.startsWith('@') ? pageUrl : '@' + pageUrl}`;
   }
   const res = await fetch(pageUrl, {
-    headers: { 'User-Agent': BROWSER_UA },
+    // SOCS: senza il cookie di consenso i server UE rispondono con la pagina
+    // consent.youtube.com, che non contiene il channelId.
+    headers: { 'User-Agent': BROWSER_UA, Cookie: 'SOCS=CAI' },
   });
   if (!res.ok) throw new Error(`Pagina canale non raggiungibile (HTTP ${res.status})`);
   const html = await res.text();
