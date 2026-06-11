@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EVcar — Auto elettriche dalla Cina, prezzo diretto import</title>
+  <meta name="description" content="EVcar by Nextora: auto elettriche dei migliori marchi cinesi con importazione gestita, omologazione UE e garanzia. Prezzi diretti import, più bassi del mercato." />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="container header-inner">
+      <a class="logo" href="#"><span class="logo-ev">EV</span>car<span class="logo-by">by Nextora</span></a>
+      <nav class="nav">
+        <a href="#catalogo">Catalogo</a>
+        <a href="#come-funziona">Come funziona</a>
+        <a href="#perche">Perché EVcar</a>
+        <a href="#preventivo" class="btn btn-small">Richiedi preventivo</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <h1>L'auto elettrica cinese che vuoi,<br /><span class="accent">al prezzo che non ti aspetti.</span></h1>
+      <p class="hero-sub">
+        Importazione gestita dalla A alla Z: ordine, trasporto, omologazione europea, immatricolazione e garanzia.
+        Tu scegli l'auto, al resto pensiamo noi.
+      </p>
+      <div class="hero-cta">
+        <a href="#catalogo" class="btn">Scopri il catalogo</a>
+        <a href="#come-funziona" class="btn btn-ghost">Come funziona l'import</a>
+      </div>
+      <ul class="hero-points">
+        <li>✓ Omologazione UE inclusa</li>
+        <li>✓ Garanzia in Italia</li>
+        <li>✓ Prezzo bloccato all'ordine</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="carousel-section" id="vetrina">
+    <div class="container">
+      <h2>In vetrina</h2>
+      <p class="section-sub">Le elettriche più richieste, pronte da ordinare.</p>
+    </div>
+    <div class="carousel-wrap">
+      <button class="carousel-btn prev" id="carPrev" aria-label="Precedente">‹</button>
+      <div class="carousel" id="carousel"></div>
+      <button class="carousel-btn next" id="carNext" aria-label="Successiva">›</button>
+    </div>
+  </section>
+
+  <section class="catalog-section" id="catalogo">
+    <div class="container">
+      <h2>Catalogo completo</h2>
+      <div class="filters" id="filters">
+        <select id="filterBrand"><option value="">Tutte le marche</option></select>
+        <select id="filterBody"><option value="">Tutte le carrozzerie</option></select>
+        <select id="filterSort">
+          <option value="price-asc">Prezzo: dal più basso</option>
+          <option value="price-desc">Prezzo: dal più alto</option>
+          <option value="range-desc">Autonomia: dalla più alta</option>
+        </select>
+      </div>
+      <div class="catalog-grid" id="catalog"></div>
+    </div>
+  </section>
+
+  <section class="steps-section" id="come-funziona">
+    <div class="container">
+      <h2>Come funziona</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">1</div>
+          <h3>Scegli e blocca il prezzo</h3>
+          <p>Selezioni l'auto dal catalogo e richiedi il preventivo: il prezzo che vedi è quello che paghi, bloccato all'ordine.</p>
+        </div>
+        <div class="step">
+          <div class="step-n">2</div>
+          <h3>Noi importiamo</h3>
+          <p>Gestiamo acquisto, trasporto marittimo assicurato e pratiche doganali. Ti aggiorniamo a ogni passaggio.</p>
+        </div>
+        <div class="step">
+          <div class="step-n">3</div>
+          <h3>Omologazione e targa</h3>
+          <p>Omologazione europea, collaudo e immatricolazione in Italia inclusi: l'auto arriva pronta a circolare.</p>
+        </div>
+        <div class="step">
+          <div class="step-n">4</div>
+          <h3>Consegna e garanzia</h3>
+          <p>Te la consegniamo con garanzia valida in Italia e assistenza dedicata anche dopo l'acquisto.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="why-section" id="perche">
+    <div class="container">
+      <h2>Perché EVcar</h2>
+      <div class="why-grid">
+        <div class="why-card">
+          <h3>💶 Prezzo diretto import</h3>
+          <p>Nessun passaggio intermedio: compri al prezzo reale dell'import, sistematicamente più basso dei concorrenti.</p>
+        </div>
+        <div class="why-card">
+          <h3>🛡️ Zero pensieri</h3>
+          <p>Dogana, IVA, omologazione, immatricolazione: ogni pratica è inclusa e seguita dai nostri specialisti.</p>
+        </div>
+        <div class="why-card">
+          <h3>🔋 Solo elettrico, solo il meglio</h3>
+          <p>Selezioniamo i modelli con il miglior rapporto qualità/prezzo del mercato cinese, il più avanzato al mondo sull'EV.</p>
+        </div>
+        <div class="why-card">
+          <h3>🌱 Parte del gruppo Nextora</h3>
+          <p>EVcar è il canale mobilità di Nextora, la multiservizi del risparmio energetico e della sostenibilità.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="quote-section" id="preventivo">
+    <div class="container">
+      <h2>Richiedi un preventivo gratuito</h2>
+      <p class="section-sub">Ti rispondiamo entro 24 ore con prezzo finale chiavi in mano e tempi di consegna.</p>
+      <form class="quote-form" id="quoteForm">
+        <div class="form-row">
+          <input type="text" name="nome" placeholder="Nome e cognome *" required />
+          <input type="email" name="email" placeholder="Email *" required />
+        </div>
+        <div class="form-row">
+          <input type="tel" name="telefono" placeholder="Telefono" />
+          <select name="auto" id="quoteCar">
+            <option value="">Auto di interesse (opzionale)</option>
+          </select>
+        </div>
+        <textarea name="messaggio" rows="4" placeholder="Domande o richieste particolari"></textarea>
+        <label class="privacy">
+          <input type="checkbox" required /> Acconsento al trattamento dei dati per essere ricontattato (GDPR).
+        </label>
+        <button type="submit" class="btn">Invia richiesta</button>
+        <p class="form-feedback" id="formFeedback"></p>
+      </form>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>
+        <div class="logo"><span class="logo-ev">EV</span>car<span class="logo-by">by Nextora</span></div>
+        <p>Auto elettriche dalla Cina, importazione gestita e garantita.</p>
+      </div>
+      <div>
+        <h4>Gruppo Nextora</h4>
+        <a href="https://nextora.it" target="_blank" rel="noreferrer">nextora.it — risparmio energetico</a>
+      </div>
+      <div>
+        <h4>Contatti</h4>
+        <p>info@evcar.it<br />P.IVA — da inserire</p>
+      </div>
+    </div>
+    <div class="footer-note">© 2026 EVcar · Nextora. Prezzi indicativi salvo conferma in preventivo; foto a scopo illustrativo.</div>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

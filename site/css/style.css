@@ -1,0 +1,184 @@
+/* EVcar by Nextora — stile vetrina */
+:root {
+  --green: #00b86b;
+  --green-dark: #00935a;
+  --ink: #10221b;
+  --ink-soft: #46615a;
+  --bg: #ffffff;
+  --bg-soft: #f2f8f5;
+  --border: #dde8e3;
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(16, 34, 27, 0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.6;
+}
+
+.container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+
+h1 { font-size: clamp(1.9rem, 4.5vw, 3.2rem); line-height: 1.15; }
+h2 { font-size: clamp(1.4rem, 3vw, 2rem); margin-bottom: 8px; }
+h3 { font-size: 1.05rem; margin-bottom: 6px; }
+.section-sub { color: var(--ink-soft); margin-bottom: 24px; }
+.accent { color: var(--green); }
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.header-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.logo { font-size: 1.35rem; font-weight: 800; text-decoration: none; color: var(--ink); }
+.logo-ev { color: var(--green); }
+.logo-by { font-size: 0.65rem; font-weight: 600; color: var(--ink-soft); margin-left: 6px; letter-spacing: 0.04em; }
+.nav { display: flex; align-items: center; gap: 22px; }
+.nav a { text-decoration: none; color: var(--ink-soft); font-weight: 500; font-size: 0.95rem; }
+.nav a:hover { color: var(--ink); }
+
+/* Bottoni */
+.btn {
+  display: inline-block;
+  background: var(--green);
+  color: #fff !important;
+  font-weight: 700;
+  padding: 12px 26px;
+  border-radius: 999px;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.15s;
+}
+.btn:hover { background: var(--green-dark); }
+.btn-small { padding: 9px 18px; font-size: 0.9rem; }
+.btn-ghost { background: transparent; color: var(--ink) !important; border: 2px solid var(--border); }
+.btn-ghost:hover { background: var(--bg-soft); }
+
+/* Hero */
+.hero { padding: 80px 0 60px; background: linear-gradient(180deg, var(--bg-soft) 0%, #fff 100%); }
+.hero-sub { max-width: 560px; color: var(--ink-soft); margin: 18px 0 26px; font-size: 1.1rem; }
+.hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.hero-points { list-style: none; display: flex; gap: 26px; flex-wrap: wrap; margin-top: 30px; color: var(--ink-soft); font-weight: 600; font-size: 0.95rem; }
+
+/* Carosello */
+.carousel-section { padding: 60px 0 30px; }
+.carousel-wrap { position: relative; max-width: 1180px; margin: 0 auto; padding: 0 50px; }
+.carousel {
+  display: flex; gap: 18px; overflow-x: auto;
+  scroll-snap-type: x mandatory; scroll-behavior: smooth;
+  padding: 16px 4px 24px;
+  scrollbar-width: none;
+}
+.carousel::-webkit-scrollbar { display: none; }
+.carousel-btn {
+  position: absolute; top: 45%; transform: translateY(-50%);
+  width: 42px; height: 42px; border-radius: 50%;
+  border: 1px solid var(--border); background: #fff;
+  font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--ink);
+  box-shadow: var(--shadow); z-index: 5;
+}
+.carousel-btn.prev { left: 0; }
+.carousel-btn.next { right: 0; }
+
+/* Card auto */
+.car-card {
+  min-width: 290px; max-width: 290px;
+  scroll-snap-align: start;
+  background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; box-shadow: var(--shadow);
+  display: flex; flex-direction: column;
+}
+.catalog-grid .car-card { min-width: 0; max-width: none; }
+.car-img {
+  height: 170px; position: relative;
+  background: linear-gradient(135deg, #103326 0%, #0c5c3c 55%, #00b86b 130%);
+  display: flex; align-items: center; justify-content: center;
+}
+.car-img img { width: 100%; height: 100%; object-fit: cover; }
+.car-img .placeholder { color: rgba(255,255,255,0.85); font-weight: 800; font-size: 1.3rem; text-align: center; padding: 0 14px; }
+.car-badge {
+  position: absolute; top: 10px; left: 10px;
+  background: rgba(16,34,27,0.85); color: #fff;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em;
+  padding: 4px 10px; border-radius: 999px;
+}
+.car-body { padding: 16px; flex: 1; display: flex; flex-direction: column; }
+.car-title { font-size: 1.1rem; font-weight: 800; }
+.car-version { color: var(--ink-soft); font-size: 0.85rem; margin-bottom: 10px; }
+.car-specs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.car-specs span {
+  background: var(--bg-soft); border: 1px solid var(--border);
+  font-size: 0.72rem; font-weight: 600; color: var(--ink-soft);
+  padding: 3px 8px; border-radius: 999px;
+}
+.car-price-row { margin-top: auto; display: flex; align-items: end; justify-content: space-between; gap: 8px; }
+.car-price { font-size: 1.3rem; font-weight: 800; color: var(--green-dark); }
+.car-price small { display: block; font-size: 0.7rem; color: var(--ink-soft); font-weight: 600; }
+.car-price .strike { text-decoration: line-through; color: var(--ink-soft); font-size: 0.85rem; font-weight: 600; margin-right: 6px; }
+.car-cta { font-size: 0.85rem; font-weight: 700; color: var(--green-dark); text-decoration: none; white-space: nowrap; }
+.car-cta:hover { text-decoration: underline; }
+
+/* Catalogo */
+.catalog-section { padding: 40px 0 60px; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 24px; }
+.filters select {
+  padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+  background: #fff; font-size: 0.92rem; color: var(--ink);
+}
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 18px; }
+.catalog-empty { color: var(--ink-soft); padding: 30px 0; }
+
+/* Step */
+.steps-section { padding: 60px 0; background: var(--bg-soft); }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-top: 24px; }
+.step { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+.step-n {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--green); color: #fff; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 12px;
+}
+.step p { color: var(--ink-soft); font-size: 0.92rem; }
+
+/* Perché */
+.why-section { padding: 60px 0; }
+.why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 24px; }
+.why-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+.why-card p { color: var(--ink-soft); font-size: 0.92rem; }
+
+/* Preventivo */
+.quote-section { padding: 60px 0; background: var(--bg-soft); }
+.quote-form { max-width: 640px; margin-top: 10px; display: flex; flex-direction: column; gap: 12px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.quote-form input, .quote-form select, .quote-form textarea {
+  width: 100%; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--border); background: #fff; font-size: 0.95rem; font-family: inherit;
+}
+.privacy { font-size: 0.8rem; color: var(--ink-soft); display: flex; gap: 8px; align-items: start; }
+.privacy input { width: auto; margin-top: 3px; }
+.quote-form .btn { align-self: start; }
+.form-feedback { font-size: 0.9rem; font-weight: 600; color: var(--green-dark); }
+
+/* Footer */
+.footer { background: var(--ink); color: #cfe0d9; padding: 44px 0 0; }
+.footer-inner { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 24px; padding-bottom: 30px; }
+.footer .logo { color: #fff; }
+.footer h4 { color: #fff; margin-bottom: 8px; }
+.footer a { color: var(--green); text-decoration: none; }
+.footer p { font-size: 0.9rem; }
+.footer-note { border-top: 1px solid rgba(255,255,255,0.12); padding: 16px 20px; font-size: 0.78rem; text-align: center; color: #8aa79c; }
+
+@media (max-width: 720px) {
+  .nav a:not(.btn) { display: none; }
+  .form-row { grid-template-columns: 1fr; }
+  .footer-inner { grid-template-columns: 1fr; }
+  .carousel-wrap { padding: 0 10px; }
+  .carousel-btn { display: none; }
+}
