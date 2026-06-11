@@ -7,6 +7,7 @@ import { logger } from './logger.ts';
 import { evaluateGoals } from './goals.ts';
 import { aiAvailable } from './ai/gemini.ts';
 import {
+  editorialProgress,
   engineStatus,
   runTask,
   startEngine,
@@ -27,6 +28,7 @@ export function createAgencyRouter(): Router {
     res.json({
       engine: engineStatus(),
       aiAvailable: aiAvailable(),
+      editorial: editorialProgress(),
       platforms,
       counts: {
         sources: db.sources.length,
@@ -105,11 +107,17 @@ export function createAgencyRouter(): Router {
     res.json(posts.slice(0, limit));
   });
 
+  // Approva una bozza; con "scheduledAt" nel body la pianifica per data e ora
+  // scelte (es. piano editoriale a 15 giorni), altrimenti esce appena possibile.
   router.post('/posts/:id/approve', (req, res) => {
     const post = getDb().posts.find((p) => p.id === req.params.id);
     if (!post) return res.status(404).json({ error: 'Post non trovato' });
+    const { scheduledAt } = req.body ?? {};
+    if (scheduledAt !== undefined && Number.isNaN(Date.parse(scheduledAt))) {
+      return res.status(400).json({ error: 'Data di pianificazione non valida' });
+    }
     post.status = 'approved';
-    post.scheduledAt = new Date().toISOString();
+    post.scheduledAt = scheduledAt ? new Date(scheduledAt).toISOString() : new Date().toISOString();
     post.error = undefined;
     saveStore();
     res.json(post);
@@ -128,8 +136,25 @@ export function createAgencyRouter(): Router {
     if (!post) return res.status(404).json({ error: 'Post non trovato' });
     if (typeof req.body.text === 'string' && req.body.text.trim()) {
       post.text = req.body.text.trim();
-      saveStore();
     }
+    if (typeof req.body.scheduledAt === 'string') {
+      if (Number.isNaN(Date.parse(req.body.scheduledAt))) {
+        return res.status(400).json({ error: 'Data di pianificazione non valida' });
+      }
+      post.scheduledAt = new Date(req.body.scheduledAt).toISOString();
+    }
+    saveStore();
+    res.json(post);
+  });
+
+  // Riporta in bozza un post approvato (per ripensamenti durante la pianificazione).
+  router.post('/posts/:id/unapprove', (req, res) => {
+    const post = getDb().posts.find((p) => p.id === req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post non trovato' });
+    if (post.status !== 'approved') return res.status(400).json({ error: 'Solo i post approvati possono tornare in bozza' });
+    post.status = 'draft';
+    post.scheduledAt = undefined;
+    saveStore();
     res.json(post);
   });
 

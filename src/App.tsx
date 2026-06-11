@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   Bot,
+  CalendarDays,
   CheckCircle2,
   ClipboardList,
   FileText,
@@ -36,6 +37,13 @@ const PLATFORM_LABELS: Record<Platform, string> = {
 interface Status {
   engine: { running: boolean; startedAt: string | null; tasks: Record<string, { lastRunAt?: string; running: boolean }> };
   aiAvailable: boolean;
+  editorial: {
+    phase: 'backfill' | 'fresh';
+    articlesTotal: number;
+    backfillTarget: number;
+    articlesToday: number;
+    dailyQuota: number;
+  };
   platforms: Record<Platform, { enabled: boolean; configured: boolean }>;
   counts: {
     sources: number;
@@ -193,6 +201,31 @@ function Overview({ status, refresh }: { status: Status; refresh: () => void }) 
           <Button onClick={() => run('generate')} variant="ghost"><Bot size={15} /> Genera ora</Button>
           <Button onClick={() => run('publish')} variant="ghost"><Send size={15} /> Pubblica ora</Button>
           <Button onClick={() => run('retro')} variant="ghost"><Target size={15} /> Retrospettiva</Button>
+        </div>
+      </Card>
+
+      <Card className="flex flex-wrap items-center gap-x-8 gap-y-2">
+        <div>
+          <div className="text-xs text-zinc-400">Fase editoriale</div>
+          <div className="font-semibold">
+            {status.editorial.phase === 'backfill' ? '📚 Storico (dal passato in avanti)' : '📰 Attualità (max 5 giorni)'}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-zinc-400">Articoli verso il traguardo storico</div>
+          <div className="font-semibold">{status.editorial.articlesTotal} / {status.editorial.backfillTarget}</div>
+        </div>
+        <div>
+          <div className="text-xs text-zinc-400">Articoli lavorati oggi</div>
+          <div className="font-semibold">{status.editorial.articlesToday} / {status.editorial.dailyQuota}</div>
+        </div>
+        <div className="min-w-40 flex-1">
+          <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all"
+              style={{ width: `${Math.min(100, (status.editorial.articlesTotal / Math.max(1, status.editorial.backfillTarget)) * 100)}%` }}
+            />
+          </div>
         </div>
       </Card>
 
@@ -360,12 +393,38 @@ function SourcesView() {
   );
 }
 
+// Converte una data ISO nel formato accettato da <input type="datetime-local">.
+function toLocalInput(iso?: string): string {
+  const d = iso ? new Date(iso) : new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
 function PostCard({ post, onAction }: { post: Post; onAction?: () => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(post.text);
+  const [schedule, setSchedule] = useState(() => toLocalInput(post.scheduledAt));
 
-  const act = async (action: 'approve' | 'reject') => {
-    await api(`/posts/${post.id}/${action}`, { method: 'POST' });
+  const approve = async (scheduledAt?: string) => {
+    await api(`/posts/${post.id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(scheduledAt ? { scheduledAt: new Date(scheduledAt).toISOString() } : {}),
+    });
+    onAction?.();
+  };
+  const reject = async () => {
+    await api(`/posts/${post.id}/reject`, { method: 'POST' });
+    onAction?.();
+  };
+  const unapprove = async () => {
+    await api(`/posts/${post.id}/unapprove`, { method: 'POST' });
+    onAction?.();
+  };
+  const reschedule = async () => {
+    await api(`/posts/${post.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ scheduledAt: new Date(schedule).toISOString() }),
+    });
     onAction?.();
   };
   const saveEdit = async () => {
@@ -425,10 +484,34 @@ function PostCard({ post, onAction }: { post: Post; onAction?: () => void }) {
       {post.critique && <div className="mt-1 text-xs text-zinc-500">Revisore: {post.critique}</div>}
       {post.error && <div className="mt-1 text-xs text-red-400">Errore: {post.error}</div>}
       {(post.status === 'draft' || post.status === 'failed') && !editing && (
-        <div className="mt-3 flex gap-2">
-          <Button onClick={() => act('approve')}><CheckCircle2 size={15} /> Approva e pubblica</Button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button onClick={() => approve()}><CheckCircle2 size={15} /> Approva subito</Button>
+          <span className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-2 py-1">
+            <input
+              type="datetime-local"
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value)}
+              className="bg-transparent text-sm text-zinc-200 [color-scheme:dark]"
+            />
+            <Button variant="ghost" onClick={() => approve(schedule)}><CalendarDays size={15} /> Pianifica</Button>
+          </span>
           <Button variant="ghost" onClick={() => setEditing(true)}>Modifica</Button>
-          <Button variant="danger" onClick={() => act('reject')}><XCircle size={15} /> Scarta</Button>
+          <Button variant="danger" onClick={reject}><XCircle size={15} /> Scarta</Button>
+        </div>
+      )}
+      {post.status === 'approved' && !editing && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-2 py-1">
+            <input
+              type="datetime-local"
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value)}
+              className="bg-transparent text-sm text-zinc-200 [color-scheme:dark]"
+            />
+            <Button variant="ghost" onClick={reschedule}><CalendarDays size={15} /> Sposta</Button>
+          </span>
+          <Button variant="ghost" onClick={() => setEditing(true)}>Modifica</Button>
+          <Button variant="ghost" onClick={unapprove}>Torna in bozza</Button>
         </div>
       )}
     </Card>
@@ -440,7 +523,7 @@ function QueueView() {
   const load = useCallback(
     () =>
       api<Post[]>('/posts?limit=200')
-        .then((all) => setPosts(all.filter((p) => p.status === 'draft' || p.status === 'approved' || p.status === 'failed')))
+        .then((all) => setPosts(all.filter((p) => p.status === 'draft' || p.status === 'failed')))
         .catch(() => {}),
     [],
   );
@@ -452,8 +535,133 @@ function QueueView() {
 
   return (
     <div className="space-y-3">
-      {posts.length === 0 && <Card className="text-center text-sm text-zinc-400">Nessun post in coda. Le bozze generate dal motore appariranno qui.</Card>}
+      {posts.length === 0 && (
+        <Card className="text-center text-sm text-zinc-400">
+          Nessuna bozza da revisionare. Le bozze generate dal motore appariranno qui: potrai modificarle,
+          approvarle subito o pianificarle a una data e ora precise (i post pianificati si gestiscono nella scheda Pianificazione).
+        </Card>
+      )}
       {posts.map((p) => <PostCard key={p.id} post={p} onAction={load} />)}
+    </div>
+  );
+}
+
+// Calendario editoriale dei prossimi 15 giorni: mostra i post approvati nel
+// giorno previsto e permette di spostarli o riportarli in bozza.
+function PlanningView() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const load = useCallback(
+    () => api<Post[]>('/posts?status=approved&limit=500').then(setPosts).catch(() => {}),
+    [],
+  );
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const days = Array.from({ length: 15 }, (_, i) => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+  const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+  const byDay = new Map<string, Post[]>();
+  const unplaced: Post[] = [];
+  for (const p of posts) {
+    if (!p.scheduledAt) {
+      unplaced.push(p);
+      continue;
+    }
+    const local = new Date(p.scheduledAt);
+    local.setHours(0, 0, 0, 0);
+    const key = dayKey(local);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push(p);
+  }
+  for (const list of byDay.values()) {
+    list.sort((a, b) => Date.parse(a.scheduledAt!) - Date.parse(b.scheduledAt!));
+  }
+  const overdue = posts.filter((p) => p.scheduledAt && Date.parse(p.scheduledAt) < days[0].getTime());
+
+  return (
+    <div className="space-y-4">
+      <Card className="text-sm text-zinc-400">
+        Piano editoriale dei prossimi 15 giorni: {posts.length} post approvati in coda.
+        Approva le bozze dalla scheda <b>Coda</b> scegliendo data e ora; qui puoi spostarle o ritirarle.
+        {overdue.length > 0 && <span className="ml-1 text-amber-400">{overdue.length} post con orario già passato usciranno alla prossima finestra di pubblicazione.</span>}
+      </Card>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {days.map((d) => {
+          const list = byDay.get(dayKey(d)) ?? [];
+          const isToday = dayKey(d) === dayKey(new Date());
+          return (
+            <Card key={dayKey(d)} className={isToday ? 'border-emerald-700/60' : ''}>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-semibold capitalize">
+                  {d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  {isToday && <span className="ml-1 text-emerald-400">· oggi</span>}
+                </span>
+                <Badge tone={list.length > 0 ? 'blue' : 'zinc'}>{list.length} post</Badge>
+              </div>
+              <div className="space-y-2">
+                {list.length === 0 && <div className="text-xs text-zinc-600">—</div>}
+                {list.map((p) => <PlannedPostRow key={p.id} post={p} onAction={load} />)}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PlannedPostRow({ post, onAction }: { post: Post; onAction: () => void }) {
+  const [moving, setMoving] = useState(false);
+  const [schedule, setSchedule] = useState(() => toLocalInput(post.scheduledAt));
+
+  const move = async () => {
+    await api(`/posts/${post.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ scheduledAt: new Date(schedule).toISOString() }),
+    });
+    setMoving(false);
+    onAction();
+  };
+  const unapprove = async () => {
+    await api(`/posts/${post.id}/unapprove`, { method: 'POST' });
+    onAction();
+  };
+
+  return (
+    <div className="rounded-lg bg-zinc-800/60 p-2 text-xs">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="font-mono text-zinc-400">
+          {post.scheduledAt ? new Date(post.scheduledAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+        </span>
+        <Badge tone="blue">{PLATFORM_LABELS[post.platform]}</Badge>
+        <span className="ml-auto flex gap-1">
+          <button onClick={() => setMoving(!moving)} className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-700" title="Sposta">
+            <CalendarDays size={13} />
+          </button>
+          <button onClick={unapprove} className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-700" title="Torna in bozza">
+            <XCircle size={13} />
+          </button>
+        </span>
+      </div>
+      <div className="line-clamp-2 text-zinc-300">{post.text}</div>
+      {moving && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <input
+            type="datetime-local"
+            value={schedule}
+            onChange={(e) => setSchedule(e.target.value)}
+            className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-200 [color-scheme:dark]"
+          />
+          <button onClick={move} className="rounded bg-emerald-600 px-2 py-1 font-medium text-white hover:bg-emerald-500">OK</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -547,6 +755,40 @@ function SettingsView() {
       </Card>
 
       <Card>
+        <h3 className="mb-1 font-semibold">Interessi e temi</h3>
+        <p className="mb-3 text-xs text-zinc-500">
+          Descrivi qui i temi che ti interessano (parole chiave o frasi, separate da virgola o a capo): il curatore
+          scarterà i contenuti delle fonti che non sono in linea. Lascia vuoto per accettare tutto.
+        </p>
+        <textarea
+          rows={3}
+          className={input}
+          placeholder="es. energie rinnovabili, fotovoltaico in agricoltura, incentivi e bandi per le aziende agricole"
+          value={config.interests}
+          onChange={(e) => set({ interests: e.target.value })}
+        />
+        <div className="mt-3 max-w-60">
+          <label className={label}>Soglia pertinenza (0-10)</label>
+          <input type="number" min={0} max={10} className={input} value={config.relevanceThreshold} onChange={(e) => set({ relevanceThreshold: Number(e.target.value) })} />
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="mb-1 font-semibold">Strategia editoriale</h3>
+        <p className="mb-3 text-xs text-zinc-500">
+          L'agenzia lavora prima in fase <b>Storico</b>: parte dai contenuti più vecchi (entro la finestra indicata) e
+          procede in ordine cronologico per costruire l'archivio del canale. Raggiunto il traguardo articoli, passa da
+          sola alla fase <b>Attualità</b> e accetta solo contenuti recenti.
+        </p>
+        <div className="grid gap-3 md:grid-cols-4">
+          <div><label className={label}>Articoli al giorno</label><input type="number" min={1} max={100} className={input} value={config.editorial.articlesPerDay} onChange={(e) => set({ editorial: { ...config.editorial, articlesPerDay: Number(e.target.value) } })} /></div>
+          <div><label className={label}>Storico: parti da (mesi fa)</label><input type="number" min={1} max={60} className={input} value={config.editorial.backfillMonthsAgo} onChange={(e) => set({ editorial: { ...config.editorial, backfillMonthsAgo: Number(e.target.value) } })} /></div>
+          <div><label className={label}>Traguardo articoli storico</label><input type="number" min={1} className={input} value={config.editorial.backfillTargetArticles} onChange={(e) => set({ editorial: { ...config.editorial, backfillTargetArticles: Number(e.target.value) } })} /></div>
+          <div><label className={label}>Attualità: età max (giorni)</label><input type="number" min={1} max={60} className={input} value={config.editorial.freshMaxAgeDays} onChange={(e) => set({ editorial: { ...config.editorial, freshMaxAgeDays: Number(e.target.value) } })} /></div>
+        </div>
+      </Card>
+
+      <Card>
         <h3 className="mb-3 font-semibold">Automazione</h3>
         <div className="grid gap-3 md:grid-cols-3">
           <div>
@@ -635,6 +877,7 @@ const TABS = [
   { id: 'overview', label: 'Panoramica', icon: Activity },
   { id: 'sources', label: 'Fonti', icon: Newspaper },
   { id: 'queue', label: 'Coda', icon: ClipboardList },
+  { id: 'planning', label: 'Pianificazione', icon: CalendarDays },
   { id: 'published', label: 'Pubblicati', icon: ListChecks },
   { id: 'playbook', label: 'Playbook', icon: FileText },
   { id: 'settings', label: 'Impostazioni', icon: Settings },
@@ -683,6 +926,7 @@ export default function App() {
       {tab === 'overview' && (status ? <Overview status={status} refresh={refresh} /> : <Card>Caricamento…</Card>)}
       {tab === 'sources' && <SourcesView />}
       {tab === 'queue' && <QueueView />}
+      {tab === 'planning' && <PlanningView />}
       {tab === 'published' && <PublishedView />}
       {tab === 'playbook' && <PlaybookView />}
       {tab === 'settings' && <SettingsView />}

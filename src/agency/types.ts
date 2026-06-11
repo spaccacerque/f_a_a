@@ -43,6 +43,9 @@ export interface ContentItem {
   publishedAt?: string;
   fetchedAt: string;
   status: ItemStatus;
+  draftedAt?: string;
+  discardReason?: string;
+  relevanceScore?: number;
 }
 
 export type PostStatus =
@@ -127,10 +130,27 @@ export interface EngineIntervals {
   retroHours: number;
 }
 
+// Strategia editoriale: quota giornaliera e fasi della linea temporale.
+// Fase "backfill": lavora i contenuti dal passato (fino a backfillMonthsAgo mesi fa)
+// in ordine cronologico, per costruire lo storico del canale.
+// Fase "fresh": dopo backfillTargetArticles articoli, accetta solo contenuti
+// con età massima freshMaxAgeDays giorni.
+export interface EditorialConfig {
+  articlesPerDay: number;
+  backfillMonthsAgo: number;
+  backfillTargetArticles: number;
+  freshMaxAgeDays: number;
+}
+
+export type EditorialPhase = 'backfill' | 'fresh';
+
 export interface AgencyConfig {
   brand: BrandConfig;
+  interests: string;
   autoPublish: boolean;
   qualityThreshold: number;
+  relevanceThreshold: number;
+  editorial: EditorialConfig;
   intervals: EngineIntervals;
   platforms: Record<Platform, PlatformConfig>;
   goals: Goal[];

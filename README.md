@@ -12,13 +12,33 @@ Il motore esegue quattro loop continui:
 | Loop | Default | Cosa fa |
 |---|---|---|
 | 🛰️ **Raccolta** | ogni 15 min | Legge tutte le fonti attive (RSS, YouTube, siti) e cattura i nuovi contenuti, senza duplicati |
-| ✍️ **Generazione** | ogni 5 min | Per ogni contenuto nuovo scrive un post per ciascuna piattaforma attiva, seguendo il *playbook editoriale*; un revisore AI assegna un voto di qualità (1-10) e, se sotto soglia, il post viene riscritto |
-| 📤 **Pubblicazione** | ogni 3 min | Pubblica i post approvati, distanziandoli nella giornata e rispettando il limite giornaliero per piattaforma |
+| ✍️ **Generazione** | ogni 5 min | Filtra i contenuti con il **curatore di pertinenza** (lavora solo i temi che ti interessano), poi scrive un post per ciascuna piattaforma attiva seguendo il *playbook editoriale*; un revisore AI assegna un voto di qualità (1-10) e, se sotto soglia, il post viene riscritto |
+| 📤 **Pubblicazione** | ogni 3 min | Pubblica i post approvati **all'ora pianificata**, rispettando il limite giornaliero per piattaforma |
 | 🎯 **Retrospettiva** | ogni 6 ore | Confronta i risultati con gli **obiettivi** (qualità media, cadenza, tasso di approvazione, freschezza fonti, tasso di errore) e **riscrive il playbook editoriale**: è il ciclo di auto-miglioramento |
 
-I post che non superano la soglia di qualità (o tutti, se disattivi la pubblicazione
-automatica) finiscono nella **coda di approvazione** della dashboard, dove puoi
-modificarli, approvarli o scartarli.
+## Flusso di lavoro: revisione e piano editoriale
+
+Per impostazione predefinita **nessun post esce da solo**: le bozze finiscono nella
+**Coda** della dashboard, dove le revisioni, le modifichi e le **pianifichi a data e ora
+precise**. Puoi dedicare una mattinata e programmare 15 giorni: la scheda
+**Pianificazione** mostra il calendario editoriale dei prossimi 15 giorni, con la
+possibilità di spostare ogni post o riportarlo in bozza. Il motore pubblica poi ogni post
+all'orario stabilito, anche se non sei collegato. (Chi preferisce la piena autonomia può
+riattivare la pubblicazione automatica dalle Impostazioni.)
+
+## Strategia editoriale a due fasi
+
+La ricerca gira tutti i giorni e lavora **12 articoli al giorno** (configurabile):
+
+1. **Fase Storico** — parte dai contenuti più vecchi (finestra: 12 mesi indietro) e
+   procede in ordine cronologico, per costruire un canale con un archivio alle spalle.
+   Il copywriter sa che il contenuto non è recente e lo valorizza come approfondimento,
+   mai come notizia dell'ultima ora.
+2. **Fase Attualità** — raggiunti i **100 articoli** (configurabile), il motore passa da
+   solo ai soli contenuti con **massimo 5 giorni** di età.
+
+Il campo **Interessi e temi** nelle Impostazioni guida il curatore: i contenuti delle
+fonti fuori tema vengono scartati con motivazione visibile.
 
 ## Piattaforme supportate
 

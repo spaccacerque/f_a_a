@@ -1,4 +1,4 @@
-import type { ContentItem, Platform, PostDraft, Source } from './types.ts';
+import type { ContentItem, EditorialPhase, Platform, PostDraft, Source } from './types.ts';
 import { ALL_PLATFORMS } from './types.ts';
 import { getConfig } from './config.ts';
 import { getDb, newId, saveStore } from './store.ts';
@@ -8,11 +8,12 @@ import { fetchYouTubeItems } from './ingest/youtube.ts';
 import { fetchWebsiteItems } from './ingest/website.ts';
 import { writePost, revisePost } from './ai/writer.ts';
 import { reviewPost, runRetrospective } from './ai/critic.ts';
+import { checkRelevance } from './ai/curator.ts';
 import { publish } from './publish/publisher.ts';
 import { evaluateGoals } from './goals.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const ITEMS_PER_GENERATE_CYCLE = 2;
+const ITEMS_PER_GENERATE_CYCLE = 3;
 
 export type TaskName = 'ingest' | 'generate' | 'publish' | 'retro';
 
@@ -123,19 +124,100 @@ function nextSlot(platform: Platform): string {
   return new Date(slot).toISOString();
 }
 
+// Fase editoriale: "backfill" finché non si raggiunge il target di articoli
+// (default 100), poi "fresh" (solo contenuti recenti).
+export function currentPhase(): EditorialPhase {
+  const cfg = getConfig();
+  return getDb().stats.articlesTotal >= cfg.editorial.backfillTargetArticles ? 'fresh' : 'backfill';
+}
+
+export function editorialProgress() {
+  const cfg = getConfig();
+  const db = getDb();
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    phase: currentPhase(),
+    articlesTotal: db.stats.articlesTotal,
+    backfillTarget: cfg.editorial.backfillTargetArticles,
+    articlesToday: db.stats.byDay[today] ?? 0,
+    dailyQuota: cfg.editorial.articlesPerDay,
+  };
+}
+
+function itemDate(item: ContentItem): number {
+  return Date.parse(item.publishedAt ?? item.fetchedAt);
+}
+
+// Seleziona i prossimi contenuti da lavorare secondo la fase:
+// - backfill: dal più VECCHIO (entro la finestra di N mesi) in avanti,
+//   per costruire lo storico del canale in ordine cronologico;
+// - fresh: solo contenuti con età massima consentita, dal più vecchio
+//   dei recenti in avanti (quelli troppo vecchi vengono scartati).
+function selectItems(limit: number): ContentItem[] {
+  const cfg = getConfig();
+  const db = getDb();
+  const now = Date.now();
+  const fresh = db.items.filter((i) => i.status === 'new');
+
+  if (currentPhase() === 'backfill') {
+    const start = new Date();
+    start.setMonth(start.getMonth() - cfg.editorial.backfillMonthsAgo);
+    const windowStart = start.getTime();
+    const selectable: ContentItem[] = [];
+    for (const item of fresh) {
+      if (itemDate(item) < windowStart) {
+        item.status = 'discarded';
+        item.discardReason = `Più vecchio della finestra storico (${cfg.editorial.backfillMonthsAgo} mesi)`;
+      } else {
+        selectable.push(item);
+      }
+    }
+    return selectable.sort((a, b) => itemDate(a) - itemDate(b)).slice(0, limit);
+  }
+
+  const maxAgeMs = cfg.editorial.freshMaxAgeDays * DAY_MS;
+  const selectable: ContentItem[] = [];
+  for (const item of fresh) {
+    if (now - itemDate(item) > maxAgeMs) {
+      item.status = 'discarded';
+      item.discardReason = `Più vecchio di ${cfg.editorial.freshMaxAgeDays} giorni (fase attualità)`;
+    } else {
+      selectable.push(item);
+    }
+  }
+  return selectable.sort((a, b) => itemDate(a) - itemDate(b)).slice(0, limit);
+}
+
 export async function runGenerate(): Promise<number> {
   const cfg = getConfig();
   const db = getDb();
   const enabledPlatforms = ALL_PLATFORMS.filter((p) => cfg.platforms[p].enabled);
   if (enabledPlatforms.length === 0) return 0;
 
-  const pending = db.items
-    .filter((i) => i.status === 'new')
-    .sort((a, b) => Date.parse(b.publishedAt ?? b.fetchedAt) - Date.parse(a.publishedAt ?? a.fetchedAt))
-    .slice(0, ITEMS_PER_GENERATE_CYCLE);
+  // Quota giornaliera: non più di articlesPerDay articoli lavorati al giorno.
+  const today = new Date().toISOString().slice(0, 10);
+  const doneToday = db.stats.byDay[today] ?? 0;
+  const remainingToday = cfg.editorial.articlesPerDay - doneToday;
+  if (remainingToday <= 0) return 0;
+
+  const pending = selectItems(Math.min(ITEMS_PER_GENERATE_CYCLE, remainingToday));
 
   let created = 0;
   for (const item of pending) {
+    // Filtro pertinenza: lavora solo i contenuti in linea con gli interessi configurati.
+    try {
+      const relevance = await checkRelevance(item);
+      item.relevanceScore = relevance.score;
+      if (!relevance.relevant) {
+        item.status = 'discarded';
+        item.discardReason = relevance.reason;
+        logger.info('curator', `Scartato (pertinenza ${relevance.score}/10): "${item.title.slice(0, 60)}" — ${relevance.reason}`);
+        continue;
+      }
+    } catch (e: any) {
+      logger.warn('curator', `Verifica pertinenza fallita per "${item.title.slice(0, 60)}": ${e.message}`);
+    }
+
     for (const platform of enabledPlatforms) {
       try {
         const draft = await draftForPlatform(item, platform);
@@ -150,6 +232,16 @@ export async function runGenerate(): Promise<number> {
       }
     }
     item.status = 'drafted';
+    item.draftedAt = new Date().toISOString();
+    db.stats.articlesTotal++;
+    db.stats.byDay[today] = (db.stats.byDay[today] ?? 0) + 1;
+
+    if (db.stats.articlesTotal === cfg.editorial.backfillTargetArticles) {
+      logger.info(
+        'engine',
+        `Traguardo storico raggiunto (${db.stats.articlesTotal} articoli): da ora fase ATTUALITÀ, solo contenuti con età massima ${cfg.editorial.freshMaxAgeDays} giorni`,
+      );
+    }
   }
   saveStore();
   return created;

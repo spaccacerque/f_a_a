@@ -20,8 +20,16 @@ function defaultConfig(): AgencyConfig {
       language: 'italiano',
       audience: 'comunità online interessata ai temi delle fonti configurate',
     },
-    autoPublish: true,
+    interests: '',
+    autoPublish: false,
     qualityThreshold: 7,
+    relevanceThreshold: 6,
+    editorial: {
+      articlesPerDay: 12,
+      backfillMonthsAgo: 12,
+      backfillTargetArticles: 100,
+      freshMaxAgeDays: 5,
+    },
     intervals: {
       ingestMinutes: 15,
       generateMinutes: 5,
@@ -75,7 +83,13 @@ export function loadConfig(): AgencyConfig {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const saved = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
-      config = { ...defaultConfig(), ...saved, platforms: { ...defaultConfig().platforms, ...saved.platforms } };
+      const defaults = defaultConfig();
+      config = {
+        ...defaults,
+        ...saved,
+        platforms: { ...defaults.platforms, ...saved.platforms },
+        editorial: { ...defaults.editorial, ...saved.editorial },
+      };
     }
   } catch (e: any) {
     logger.error('config', `Configurazione non leggibile, uso i default: ${e.message}`);
@@ -92,6 +106,7 @@ export function updateConfig(patch: Partial<AgencyConfig>): AgencyConfig {
     ...config,
     ...patch,
     brand: { ...config.brand, ...(patch.brand ?? {}) },
+    editorial: { ...config.editorial, ...(patch.editorial ?? {}) },
     intervals: { ...config.intervals, ...(patch.intervals ?? {}) },
     platforms: { ...config.platforms, ...(patch.platforms ?? {}) },
     goals: patch.goals ?? config.goals,

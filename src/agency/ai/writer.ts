@@ -31,6 +31,14 @@ Scrivi SEMPRE in ${cfg.brand.language}.
 Segui scrupolosamente questo playbook editoriale (aggiornato di continuo dai cicli di miglioramento):
 ${playbook}`;
 
+  const ageDays = item.publishedAt
+    ? Math.floor((Date.now() - Date.parse(item.publishedAt)) / 86_400_000)
+    : null;
+  const ageNote =
+    ageDays !== null && ageDays > 14
+      ? `\nATTENZIONE: il contenuto risale a circa ${ageDays} giorni fa. NON presentarlo come notizia dell'ultima ora: valorizzalo come approfondimento, guida o contenuto sempre valido.`
+      : '';
+
   const prompt = `Scrivi un post per la piattaforma ${platform}.
 Regole della piattaforma: ${PLATFORM_RULES[platform]}
 
@@ -38,7 +46,8 @@ Contenuto di origine:
 - Titolo: ${item.title}
 - Fonte: ${item.sourceName}
 - Link: ${item.link}
-- Riassunto: ${item.summary || '(non disponibile, basati sul titolo senza inventare dettagli)'}
+- Data di pubblicazione: ${item.publishedAt ?? 'sconosciuta'}
+- Riassunto: ${item.summary || '(non disponibile, basati sul titolo senza inventare dettagli)'}${ageNote}
 
 Rispondi SOLO con JSON nel formato: {"text": "..."}`;
 

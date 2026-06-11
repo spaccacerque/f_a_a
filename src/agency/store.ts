@@ -8,11 +8,18 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const PLAYBOOK_FILE = path.join(DATA_DIR, 'playbook.md');
 
+interface EditorialStats {
+  articlesTotal: number;
+  // Conteggio articoli lavorati per giorno (chiave: YYYY-MM-DD).
+  byDay: Record<string, number>;
+}
+
 interface Db {
   sources: Source[];
   items: ContentItem[];
   posts: PostDraft[];
   retros: RetroReport[];
+  stats: EditorialStats;
 }
 
 const DEFAULT_PLAYBOOK = `# Playbook editoriale
@@ -29,7 +36,7 @@ automaticamente dal ciclo di auto-miglioramento dell'agenzia.
 - Non inventare fatti non presenti nella fonte.
 `;
 
-let db: Db = { sources: [], items: [], posts: [], retros: [] };
+let db: Db = { sources: [], items: [], posts: [], retros: [], stats: { articlesTotal: 0, byDay: {} } };
 let saveTimer: NodeJS.Timeout | null = null;
 
 export function newId(): string {
@@ -44,7 +51,8 @@ export function loadStore() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   if (fs.existsSync(DB_FILE)) {
     try {
-      db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf-8')) };
+      const saved = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
+      db = { ...db, ...saved, stats: { ...db.stats, ...saved.stats } };
       logger.info('store', `Database caricato: ${db.sources.length} fonti, ${db.items.length} contenuti, ${db.posts.length} post`);
     } catch (e: any) {
       logger.error('store', `Database corrotto, riparto da zero: ${e.message}`);
@@ -64,6 +72,11 @@ export function saveStore() {
       db.items = db.items.slice(-2000);
       db.posts = db.posts.slice(-5000);
       db.retros = db.retros.slice(-100);
+      // Conserva solo gli ultimi 60 giorni di conteggi giornalieri.
+      const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      for (const day of Object.keys(db.stats.byDay)) {
+        if (day < cutoff) delete db.stats.byDay[day];
+      }
       fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
     } catch (e: any) {
       logger.error('store', `Salvataggio fallito: ${e.message}`);
